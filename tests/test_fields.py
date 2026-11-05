@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from ingest.fields import (clean_amount, clean_app, clean_card, clean_consent, clean_email, clean_name,
                            clean_phone, clean_subscription, parse_timestamp, timestamp_sort_key)
@@ -106,6 +107,17 @@ class DateTests(unittest.TestCase):
         self.assertEqual(parse_timestamp("0001-01-01T00:00:00+01:00", RUN).codes, ["TIMESTAMP_OUT_OF_RANGE"])
         self.assertEqual(parse_timestamp("2026-11-06", RUN).codes, ["TIMESTAMP_IN_FUTURE"])
         self.assertEqual(parse_timestamp("", RUN).codes, [])
+
+    def test_repeated_and_skipped_hour(self):
+        """AC-36: a timestamp without a zone in the repeated or skipped local hour is kept with TIMESTAMP_AMBIGUOUS_HOUR."""
+        tz = ZoneInfo("Europe/Bucharest")
+        run = datetime(2026, 11, 5, tzinfo=tz)
+        r = parse_timestamp("2026-10-25 03:30", run, tz)
+        self.assertEqual((r.value, r.codes), ("2026-10-25T03:30:00", ["TIMESTAMP_AMBIGUOUS_HOUR"]))
+        self.assertEqual(parse_timestamp("2026-03-29 03:30", run, tz).codes, ["TIMESTAMP_AMBIGUOUS_HOUR"])
+        self.assertEqual(parse_timestamp("2026-10-25 05:30", run, tz).codes, [])
+        self.assertEqual(parse_timestamp("2026-10-25", run, tz).codes, [])
+        self.assertEqual(parse_timestamp("2026-10-25T03:30:00+02:00", run, tz).codes, [])
 
     def test_sort_key(self):
         """Spec 6.6 step 8: a date alone counts as 00:00:00 local time when compared."""

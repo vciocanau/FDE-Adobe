@@ -1,4 +1,5 @@
 """Field rules (spec section 6). Every function takes the raw cell and returns a FieldResult."""
+import os
 import re
 import unicodedata
 from functools import lru_cache
@@ -82,8 +83,27 @@ _DATE_TIME = re.compile(
 
 @lru_cache(maxsize=1)
 def local_zone() -> tzinfo:
-    """The local time zone of the machine, as a fixed offset."""
-    return datetime.now().astimezone().tzinfo
+    """The local time zone with its daylight saving rules when they can be loaded, else a fixed offset.
+
+    zoneinfo needs the system zone database (Linux, macOS) or the tzdata package (Windows); without it the
+    repeated or skipped hour cannot be detected, and the check is skipped rather than failing the run.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        if os.environ.get("TZ"):
+            return ZoneInfo(os.environ["TZ"])
+        with open("/etc/localtime", "rb") as f:
+            return ZoneInfo.from_file(f)
+    except Exception:
+        return datetime.now().astimezone().tzinfo
+
+
+def _ambiguous(moment: datetime, tz: tzinfo) -> bool:
+    """True when a wall time repeats or is skipped in tz (the two folds give different offsets)."""
+    try:
+        return moment.replace(tzinfo=tz, fold=0).utcoffset() != moment.replace(tzinfo=tz, fold=1).utcoffset()
+    except Exception:
+        return False
 
 
 def parse_timestamp(raw: str, run_time: datetime, tz: tzinfo | None = None) -> FieldResult:
@@ -115,6 +135,8 @@ def parse_timestamp(raw: str, run_time: datetime, tz: tzinfo | None = None) -> F
         return FieldResult("", codes + ["TIMESTAMP_OUT_OF_RANGE"])
     if compared > run_time:
         return FieldResult("", codes + ["TIMESTAMP_IN_FUTURE"])
+    if m["h"] is not None and not m["z"] and _ambiguous(moment, tz or local_zone()):
+        codes = codes + ["TIMESTAMP_AMBIGUOUS_HOUR"]
     return FieldResult(stored, codes)
 
 
