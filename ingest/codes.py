@@ -1,0 +1,41 @@
+"""Plain-text messages for rejection, duplicate and warning codes (spec section 9)."""
+
+MESSAGES = {
+    # Rejection reasons
+    "CARD_EMPTY": "Loyalty card is empty",
+    "CARD_INVALID": "Loyalty card is not 16 digits",
+    "EXTRA_CELLS": "Row has more cells than the header and an extra cell holds a value",
+    "BAD_QUOTING": "Row has text after a closing quote",
+    # Duplicate reasons
+    "LOST_OLDER_TIMESTAMP": "The winning row has a more recent valid interaction timestamp",
+    "LOST_INVALID_TIMESTAMP": "This row has a missing or invalid timestamp and the winner has a valid one",
+    "LOST_TIE_LATER_ROW_WINS": "Timestamps tie or both are unusable, and the later row in the input won",
+    # Warnings
+    "SHORT_ROW": "Row has fewer cells than the header; missing cells are empty",
+    "CONTROL_CHARACTER_REMOVED": "A control character was removed from a field value",
+    "EMAIL_INVALID": "Email is not valid and was emptied",
+    "PHONE_INVALID": "Phone is not valid and was emptied",
+    "PHONE_LEADING_ZERO": "Phone has nine digits and starts with 7; a lost leading 0 is assumed",
+    "TIMESTAMP_UNREADABLE": "Timestamp cannot be read and was emptied",
+    "TIMESTAMP_OUT_OF_RANGE": "Timestamp is outside the range that can be converted and was emptied",
+    "TIMESTAMP_IN_FUTURE": "Timestamp is later than the run time and was emptied",
+    "TIMESTAMP_AMBIGUOUS_HOUR": "Timestamp without a time zone falls in an hour that repeats or does not exist; local time is assumed",
+    "PURCHASE_AMOUNT_INVALID": "Last purchase amount is not a valid number, is negative or is zero and was emptied",
+    "CONSENT_UNKNOWN": "Consent value is empty or not recognized",
+    "SUBSCRIPTION_UNKNOWN": "Subscription value is empty or not recognized",
+    "APP_INSTALLED_UNKNOWN": "App installed value is empty or not recognized",
+    "NO_CONTACT_CHANNEL": "Profile has no valid email, phone or app channel",
+    "DUPLICATE_CONFLICT": "Duplicates disagree on consent or subscription and the order is unknown",
+    "DUPLICATE_TIE": "Timestamps tie or are unusable; the later row won",
+    "UNKNOWN_COLUMN": "Column is not recognized and is passed through unchanged",
+    "CONSENT_COLUMN_MISSING": "No consent column; every customer is not eligible",
+    "SUBSCRIPTION_COLUMN_MISSING": "No subscription column; every customer is not eligible",
+    "MISSING_CONTACT_THRESHOLD": "Too many canonical customers have no contact channel; the source probably broke",
+    "REJECTION_RATE_HIGH": "The rejection rate is unusually high and the source is worth checking",
+    "MEMORY_WARNING": "Memory use passed the warning threshold",
+    "MEMORY_TOTAL_UNKNOWN": "Total memory cannot be read; the memory check is skipped",
+    "MAPPING_AGENT_FALLBACK": "The mapping agent failed; the synonym dictionary was used",
+    "PERMISSIONS_SKIPPED": "File permissions cannot be restricted on this system",
+    "TRAILING_EMPTY_CELLS": "Row has more cells than the header, and all extra cells are empty",
+    "MULTILINE_RECORD": "Record spans more than one line; check that a quote was not closed by accident",
+}
