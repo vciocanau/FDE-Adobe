@@ -8,7 +8,7 @@ This repository is spec-driven. Read in this order before changing anything:
 
 ## Rules
 
-- Python 3.11+, standard library only (D18). No new dependency.
+- Python 3.11+, standard library only (D18). No new dependency; `tzdata` is optional on Windows only.
 - Run the tests with `python -m unittest -v`; the 100,000-record test with `INGEST_VOLUME=1`.
 - Test first. Every test's docstring names the acceptance case (AC-xx) or spec section it proves; expectations come from the specification, not from the code.
 - Every code (run error, rejection, duplicate reason, warning) is a name from specification section 9. A new code is added there first.

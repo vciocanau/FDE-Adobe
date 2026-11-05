@@ -18,6 +18,15 @@ A command-line program that reads one customer-profile CSV export from a superma
 
 Python 3.11 or later. Nothing to install: the program and the tests use the standard library only.
 
+Optional on Windows: the `tzdata` package lets the run detect a timestamp in the hour that repeats or is skipped when the clock changes (`TIMESTAMP_AMBIGUOUS_HOUR`). Linux and macOS do not need it. Without it the run works the same and skips that check.
+
+```powershell
+py -3.14 -m venv .venv
+.venv\Scripts\python -m pip install tzdata
+$env:TZ = "Europe/Bucharest"
+.venv\Scripts\python -m unittest
+```
+
 ## Run
 
 Windows:
@@ -101,7 +110,7 @@ CRM CSV ──► read ──────────► clean ─────�
 - **Duplicates:** the most recent valid interaction wins. When the order cannot be known and the rows disagree on consent or subscription, the customer is not eligible (D20).
 - **Strict reading:** extra cells with values, text after a closing quote and an unclosed quote are diagnosed, never silently absorbed (D29).
 - **The mapping agent is simulated.** There is no API key. It sees only column names and masked samples, and it never approves a mapping by itself (D6, D8, D24).
-- **Zero dependencies** (D18).
+- **Zero dependencies** (D18); `tzdata` is optional on Windows.
 
 ## Tests
 
@@ -130,7 +139,7 @@ On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run too
 - A quote in the middle of an unquoted field (`5" pipe`) is read as text and not flagged. The standard CSV reader does not detect it (spec section 4).
 - The memory estimate uses one ratio for every file. A customer file with much longer fields or many more columns may need a different ratio. The measured ratio is logged at the end of every run so that a mismatch shows.
 - A column that keeps its name but changes its meaning cannot be detected (spec section 5, Out of contract).
-- The repeated or skipped local hour is detected only where the system time-zone database is available. Windows has it only with the `tzdata` package; elsewhere the check is skipped silently.
+- The repeated or skipped local hour is detected only where the time-zone database is available. Windows has it only with the optional `tzdata` package and `TZ` set; without them the check is skipped silently.
 
 ## Not implemented
 

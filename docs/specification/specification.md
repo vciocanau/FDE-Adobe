@@ -224,7 +224,7 @@ Examples: `Ana@Example.COM` with surrounding spaces gives `ana@example.com`; `an
 4. A value that matches none of these formats, or is not a real calendar date (`13.13.2026`, `31.02.2026`), is emptied with the warning `TIMESTAMP_UNREADABLE`.
 5. A value outside the range that can be converted to UTC (for example year 0001 with an offset) is emptied with the warning `TIMESTAMP_OUT_OF_RANGE`.
 6. A value later than the time of the run is emptied with the warning `TIMESTAMP_IN_FUTURE`.
-7. A value with a time but no time zone is read in local time. If it falls in the hour that repeats when daylight saving time ends, or in the hour that is skipped when it starts, it is kept and the row gets the warning `TIMESTAMP_AMBIGUOUS_HOUR`.
+7. A value with a time but no time zone is read in local time. If it falls in the hour that repeats when daylight saving time ends, or in the hour that is skipped when it starts, it is kept and the row gets the warning `TIMESTAMP_AMBIGUOUS_HOUR`. The check needs the time-zone database: Linux and macOS have it; Windows needs the optional `tzdata` package and the `TZ` environment variable set to the zone name (for example `Europe/Bucharest`). Without them the check is skipped and the run continues (D18).
 8. A valid value is stored in ISO 8601: `YYYY-MM-DD` for a date alone, `YYYY-MM-DDTHH:MM:SS` for a date with a time, with the offset when the value had one. When timestamps are compared (duplicates, future check), a date alone counts as 00:00:00 local time.
 9. In every case the profile is kept; only the field is emptied.
 
