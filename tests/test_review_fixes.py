@@ -16,7 +16,9 @@ from tests.test_cli import DICTIONARY
 from tests.test_fields import RUN
 
 
-class ReviewFixTests(TempDirTestCase):
+class CliCase(TempDirTestCase):
+    """Helpers only, no tests: runs the command line on a small input written for the test."""
+
     def setUp(self):
         super().setUp()
         self.out = self.tmp / "runs"
@@ -36,6 +38,8 @@ class ReviewFixTests(TempDirTestCase):
             rows = list(csv.reader(f))
         return rows[0], [dict(zip(rows[0], r)) for r in rows[1:]]
 
+
+class ReviewFixTests(CliCase):
     def test_input_column_named_like_an_output_column(self):
         """Spec 7.3 and 8 (review C1): an input column eligible_for_campaign never overwrites the computed value."""
         code, err = self.run_cli("card_number,consent,subscription,email,eligible_for_campaign\n"
@@ -100,7 +104,7 @@ class ReviewFixTests(TempDirTestCase):
         self.assertNotIn("0722123456", log)
 
 
-class CoverageTests(ReviewFixTests):
+class CoverageTests(CliCase):
     """Review I5: acceptance cases whose first tests proved only part of the expected result."""
 
     def test_ac25_control_characters_in_every_field(self):
@@ -180,7 +184,7 @@ class CoverageTests(ReviewFixTests):
                 self.assertEqual(func(f"  {value.upper()} ").value, expected, value)
 
 
-class ExternalReviewTests(ReviewFixTests):
+class ExternalReviewTests(CliCase):
     """Findings of an external review of the published branch."""
 
     def test_threshold_decision_is_the_same_in_csv_and_json(self):
@@ -238,3 +242,37 @@ class ExternalReviewTests(ReviewFixTests):
             code, err = self.run_cli("card_number,email\n1111222233334444,a@b.ro\n")
         self.assertEqual(code, 0, err)
         self.assertEqual(seen, [0o700])
+
+
+class MissingOptionalColumnTests(CliCase):
+    """Spec 4 (Fields: absent optional columns give empty values) combined with spec 7.2 (duplicates)."""
+
+    def test_duplicates_without_a_timestamp_column(self):
+        """AC-44: with no last_interaction_at column, a duplicated card resolves like missing timestamps."""
+        code, err = self.run_cli("card_number,email,consent,subscription\n"
+                                 "1000200030004000,one@example.com,da,activ\n"
+                                 "1000200030004000,two@example.com,da,activ\n")
+        self.assertEqual(code, 0, err)
+        folder = next(self.out.glob("run_*"))
+        _, rows = self.canonical()
+        self.assertEqual([(r["email"], r["source_record_number"]) for r in rows], [("two@example.com", "2")])
+        self.assertIn("LOST_TIE_LATER_ROW_WINS", (folder / "duplicates.csv").read_text())
+        self.assertIn("DUPLICATE_TIE", (folder / "warnings.csv").read_text())
+
+    def test_any_missing_optional_column_with_duplicates(self):
+        """Spec 4 and 7.2: every optional column may be absent while a card is duplicated; the run never fails."""
+        optional = ["first_name", "last_name", "email", "phone", "app_installed",
+                    "last_interaction_at", "last_purchase_at", "last_purchase_amount"]
+        values = {"card_number": "1000200030004000", "first_name": "Ana", "last_name": "Pop", "email": "a@b.ro",
+                  "phone": "0722123456", "app_installed": "da", "consent": "da", "subscription": "activ",
+                  "last_interaction_at": "2026-10-01", "last_purchase_at": "2026-09-01", "last_purchase_amount": "12.50"}
+        for missing in optional:
+            with self.subTest(missing=missing):
+                shutil.rmtree(self.out, ignore_errors=True)
+                header = [c for c in values if c != missing]
+                row = ",".join(values[c] for c in header)
+                code, err = self.run_cli(",".join(header) + "\n" + row + "\n" + row + "\n")
+                self.assertEqual(code, 0, err)
+                summary = json.loads(next(self.out.glob("run_*/run_summary.json")).read_text())
+                self.assertEqual(summary["destinations"],
+                                 {"canonical": 1, "rejected": 0, "duplicate_losing": 1, "reconciled": True})

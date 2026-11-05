@@ -53,6 +53,8 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 13 | A threshold flag in `run_summary.json` decided on the rounded percentage (3.003% shown as 3.00%, not above 3%), while `warnings.csv` decided on the exact value, so the two files disagreed | External review of the published branch (another AI model, run by the owner) | The flags in the summary follow the same decision as the warnings; regression tests for both thresholds |
 | 14 | A temporary folder named by the second: a second run started in the same second failed and deleted the first run's folder | External review | Each run creates its own unique folder and removes only that folder; regression test |
 | 15 | The temporary folder was made owner-only after the data was written into it | External review | The folder is created owner-only before any write; regression test |
+| 16 | A cleaned row held only the fields of the columns present in the file, so a file without the optional `last_interaction_at` column and with a duplicated card stopped with `INTERNAL_ERROR` instead of applying the rule for missing timestamps (spec 7.2) | A test combining each absent optional column with a duplicated card | Every cleaned row starts with all canonical fields empty, so an absent column behaves like an empty one; regression tests for the reported case and for every optional column |
+| 17 | Test classes inherited from a class that already held tests, so some tests ran two to four times and the reported count was inflated | Counting test methods against the runner's total | Helpers moved to a base class without tests; each test now runs once (147) |
 
 ## Memory guard at 100x
 

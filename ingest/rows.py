@@ -68,7 +68,8 @@ def process(read: ReadResult, maps: list[ColumnMap], run_time: datetime, check=N
 
 
 def _clean_record(cells, maps, run_time, number):
-    row = dict(_MISSING_DEFAULT)
+    # Every canonical field exists on every row: an absent optional column behaves like an empty one (spec 4).
+    row = {**dict.fromkeys(CANONICAL, ""), **_MISSING_DEFAULT}
     row["_pass"] = {}
     warnings: list[Warning] = []
     card_codes: list[str] = []
