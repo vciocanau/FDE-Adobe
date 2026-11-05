@@ -1,0 +1,13 @@
+{
+  "card_number": ["card_number", "loyalty_card", "card", "card_no", "nr_card", "numar_card"],
+  "first_name": ["first_name", "firstname", "given_name", "prenume"],
+  "last_name": ["last_name", "surname", "family_name", "nume familie"],
+  "email": ["email", "e-mail", "email_address", "mail"],
+  "phone": ["phone", "phone_number", "mobile", "telefon", "gsm", "tel", "mobil", "tel mobil"],
+  "app_installed": ["app_installed", "has_app", "aplicatie_instalata", "aplicatie", "app"],
+  "consent": ["consent", "gdpr_consent", "acord", "acord gdpr", "gdpr", "opt_in"],
+  "subscription": ["subscription", "subscription_status", "newsletter_status", "abonare", "newsletter", "notificari", "promotii", "marketing", "campanii marketing", "marketing_consent"],
+  "last_interaction_at": ["last_interaction", "last_activity", "last_contact", "ultima_interactiune"],
+  "last_purchase_at": ["last_purchase", "last_order_date", "ultima_achizitie"],
+  "last_purchase_amount": ["last_purchase_amount", "amount_spent", "total_spent", "suma_cheltuita", "valoare bon", "total bon"]
+}

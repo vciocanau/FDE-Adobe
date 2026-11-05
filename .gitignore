@@ -1,0 +1,6 @@
+.superpowers/
+runs/
+__pycache__/
+*.pyc
+tests/_tmp/
+synthetic_*.csv
