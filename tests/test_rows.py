@@ -146,6 +146,15 @@ class RowTests(unittest.TestCase):
         out = self.run_rows([("", "da", "activ", "a@b.ro")] * 3)
         self.assertEqual((len(out.canonical), len(out.rejected)), (0, 3))
 
+    def test_empty_and_filled_optional_cells(self):
+        """AC-12: optional and pass-through cells empty in some rows and filled in others; no row rejected."""
+        records = [RawRecord(1, 2, ["1111222233334444", "da", "activ", "a@b.ro", "", "2026-01-01", "Ortodox"], ""),
+                   RawRecord(2, 3, ["1111222233335555", "da", "activ", "", "", "", ""], "")]
+        out = self.process(HEADER, records)
+        self.assertEqual(([r["Religie"] for r in out.canonical], [r["last_interaction_at"] for r in out.canonical]),
+                         (["Ortodox", ""], ["2026-01-01", ""]))
+        self.assertEqual(out.rejected, [])
+
     def test_control_character_in_pass_through(self):
         """AC-25: a control character in a pass-through value is removed with a warning naming the column."""
         records = [RawRecord(1, 2, ["1111222233334444", "da", "activ", "a@b.ro", "", "2026-01-01", "Orto\x01dox"], "")]

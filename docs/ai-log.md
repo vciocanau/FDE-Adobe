@@ -29,3 +29,14 @@ Record of the points where the AI proposed something and the owner rejected or c
 | 23 | Control characters in other fields | Left the older rule in place for phone, email, card, consent, subscription and app installed (empty or reject the field), after name had changed to removal | One rule for every field: remove the control character, keep the rest, follow the field's own rule, warn with one code `CONTROL_CHARACTER_REMOVED` | The owner noticed the inconsistency; same principle as names: nothing is guessed, only the stray character is removed | Spec sections 6.1 to 6.5, 9; D29 |
 | 24 | Last purchase amount rules | Negative amount invalid (as in D10); open questions about zero and thousands separators | Zero invalid, negative amount invalid (the owner first considered a negative amount as a possible return, then decided not to accept it), thousands separators not accepted, currency not read and to be confirmed with the analyst because customers may not all be in Romania | Keeps the rule simple and avoids guessing ambiguous values | Spec section 6.10; D10 |
 | 25 | 10x and 100x volume | Extrapolate 10x and 100x from the 100,000-record test (D13) | Measure a real 1,000,000-record run and write the figures in the README; attempt a 10,000,000-record run and document whether it completes or stops on the memory limit | Real figures are stronger than an estimate, and a clean memory stop proves D15 | Spec section 11.7; D13 |
+
+## Corrections found during implementation
+
+Errors in AI-produced work that the tests or the measurements caught, and how each was corrected.
+
+| # | What the AI produced | How it was found | Correction |
+| -- | -------------------- | ---------------- | ---------- |
+| 1 | Starting dictionary without the canonical names `last_interaction_at` and `last_purchase_at`, so a file using the canonical names stopped for a mapping approval | Failing end-to-end test (`test_success`) | Every canonical field name maps to itself; regression test added |
+| 2 | A test card written as 5-9-2 digit groups that was not the same card | The duplicate test failed on correct code | Test data corrected; code unchanged |
+| 3 | Control-character removal character by character: 7 s of cleaning for 100,000 records | Profiling the volume test | Regular expression over U+0000–001F and U+007F–009F, checked equal to Unicode category Cc; cleaning time down to about 4 s |
+| 4 | A memory guard that the specification says stops a run cleanly at 80% | The 10,000,000-record run was killed by the operating system before the first check | Reported to the owner as a limitation; decision recorded below |
