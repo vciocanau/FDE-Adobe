@@ -8,7 +8,8 @@ from pathlib import Path
 from ingest import mapping, publish, reader, rows, writer
 from ingest.agent import SimulatedAgent
 from ingest.errors import RunError
-from ingest.ops import StageTimer, setup_log, total_memory_mb
+from ingest.models import Warning
+from ingest.ops import MemoryGuard, StageTimer, setup_log, total_memory_mb
 
 STRONG_ROW_WARNINGS = {"NO_CONTACT_CHANNEL", "DUPLICATE_CONFLICT"}
 
@@ -106,11 +107,19 @@ def _fail(err: RunError, log, temp: Path, args, run_id: str, exc: Exception | No
 def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> int:
     timer = StageTimer()
     run_time = now_utc.astimezone()
+    total_mb = total_memory_mb()
+    guard = MemoryGuard(args.memory_warn, args.memory_stop, total_mb)
+    memory_warnings: list[Warning] = []
+
+    def check():
+        for code in guard.check(state["stage"]):
+            memory_warnings.append(Warning(None, None, code))
+            log.warning(code.replace("_", " ").lower(), extra={"stage": state["stage"], "code": code})
     log.info(f"Run {run_id} started", extra={"stage": "start", "code": "-"})
 
     with timer.stage("read"):
         state["stage"] = "read"
-        read = reader.read_file(args.input)
+        read = reader.read_file(args.input, check)
         state["stage"] = "map"
         try:
             dictionary = mapping.load_dictionary(args.dictionary)
@@ -119,12 +128,15 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
         maps, map_warnings = mapping.resolve_mapping(
             read.header, [r.cells for r in read.records[:1000]], args.dictionary, args.output,
             args.input.name, SimulatedAgent(dictionary), args.approve, now_utc)
+        state["stage"] = "read"
+        check()
     _log_stage(log, "read", timer)
 
     with timer.stage("clean"):
         state["stage"] = "clean"
         read.warnings = map_warnings + read.warnings
-        outcome = rows.process(read, maps, run_time)
+        outcome = rows.process(read, maps, run_time, check)
+        check()
     _log_stage(log, "clean", timer)
 
     thresholds = {"missing_contact_pct": args.missing_contact_threshold, "rejection_pct": args.rejection_threshold,
@@ -132,17 +144,20 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
     common = dict(run_id=run_id, run_started_at=run_time.isoformat(timespec="seconds"),
                   export_date=datetime.fromtimestamp(args.input.stat().st_mtime).date().isoformat(),
                   input_name=args.input.name, rows_received=read.rows_received, maps=maps, outcome=outcome,
-                  total_memory_mb=_round(total_memory_mb()), thresholds=thresholds)
+                  total_memory_mb=_round(total_mb), thresholds=thresholds)
+    outcome.warnings.extend(memory_warnings + rows.run_flags(outcome, read.rows_received, thresholds))
 
     with timer.stage("write"):
         state["stage"] = "write"
         temp.mkdir()
         writer.write_outputs(temp, outcome, maps, writer.build_summary(stages=timer.results(), total_ms=timer.total_ms(), **common))
+        check()
     _log_stage(log, "write", timer)
 
     with timer.stage("verify"):
         state["stage"] = "verify"
         publish.verify(temp, read.rows_received)
+        check()
     summary = writer.build_summary(stages=timer.results(), total_ms=timer.total_ms(), **common)
     writer.write_summary(temp, summary)
     _log_stage(log, "verify", timer)

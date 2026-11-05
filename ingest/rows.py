@@ -17,7 +17,8 @@ _CLEANERS = {
 _MISSING_DEFAULT = {"consent": "unknown", "subscription": "unknown", "app_installed": "unknown"}
 
 
-def process(read: ReadResult, maps: list[ColumnMap], run_time: datetime) -> Outcome:
+def process(read: ReadResult, maps: list[ColumnMap], run_time: datetime, check=None) -> Outcome:
+    """Clean every record; `check` is called every 10,000 records (memory guard, spec 10.3)."""
     mapped = {m.field for m in maps if m.field}
     warnings = list(read.warnings)
     rejected = list(read.rejected)
@@ -26,7 +27,9 @@ def process(read: ReadResult, maps: list[ColumnMap], run_time: datetime) -> Outc
             warnings.append(Warning(None, None, f"{field.upper()}_COLUMN_MISSING"))
 
     rows: list[dict] = []
-    for record in read.records:
+    for index, record in enumerate(read.records, start=1):
+        if check and index % 10_000 == 0:
+            check()
         row, row_warnings, card_codes = _clean_record(record.cells, maps, run_time, record.number)
         if card_codes:
             rejected.append(Rejected(record.number, card_codes, record.original))
@@ -133,3 +136,15 @@ def _ineligibility(row: dict, mapped: set[str], conflict: bool) -> list[str]:
     if conflict:
         reasons.append("CONFLICTING_DUPLICATES")
     return reasons
+
+
+def run_flags(outcome: Outcome, rows_received: int, thresholds: dict) -> list[Warning]:
+    """Spec 7.4: run warnings for the missing-contact and rejection thresholds."""
+    warnings = []
+    canonical = len(outcome.canonical)
+    no_contact = sum("NO_CONTACT_CHANNEL" in r["ineligibility_reasons"] for r in outcome.canonical)
+    if canonical and no_contact * 100 > thresholds["missing_contact_pct"] * canonical:
+        warnings.append(Warning(None, None, "MISSING_CONTACT_THRESHOLD"))
+    if rows_received and len(outcome.rejected) * 100 > thresholds["rejection_pct"] * rows_received:
+        warnings.append(Warning(None, None, "REJECTION_RATE_HIGH"))
+    return warnings

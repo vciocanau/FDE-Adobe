@@ -1,8 +1,10 @@
 import logging
 import sys
 import unittest
+from unittest import mock
 
-from ingest.ops import StageTimer, peak_memory_mb, setup_log, total_memory_mb
+from ingest.errors import RunError
+from ingest.ops import MemoryGuard, StageTimer, peak_memory_mb, setup_log, total_memory_mb
 from tests.helpers import TempDirTestCase
 
 
@@ -39,6 +41,27 @@ class OpsTests(TempDirTestCase):
             log.removeHandler(handler)
         line = path.read_text(encoding="utf-8").strip()
         self.assertRegex(line, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z INFO read - Stage finished$")
+
+
+class MemoryGuardTests(unittest.TestCase):
+    def test_warning_once_then_stop(self):
+        """AC-65: above 50% a warning, once; above 80% a clean stop with MEMORY_LIMIT (exit 4)."""
+        guard = MemoryGuard(50, 80, total_mb=1000)
+        with mock.patch("ingest.ops.peak_memory_mb", return_value=400):
+            self.assertEqual(guard.check("read"), [])
+        with mock.patch("ingest.ops.peak_memory_mb", return_value=600):
+            self.assertEqual(guard.check("read"), ["MEMORY_WARNING"])
+        with mock.patch("ingest.ops.peak_memory_mb", return_value=601):
+            self.assertEqual(guard.check("read"), [])
+        with mock.patch("ingest.ops.peak_memory_mb", return_value=801), self.assertRaises(RunError) as e:
+            guard.check("clean")
+        self.assertEqual((e.exception.code, e.exception.exit_code, e.exception.stage), ("MEMORY_LIMIT", 4, "clean"))
+
+    def test_unknown_total(self):
+        """AC-65: an unknown total gives MEMORY_TOTAL_UNKNOWN once and skips the check."""
+        guard = MemoryGuard(50, 80, total_mb=None)
+        self.assertEqual(guard.check("read"), ["MEMORY_TOTAL_UNKNOWN"])
+        self.assertEqual(guard.check("clean"), [])
 
 
 if __name__ == "__main__":

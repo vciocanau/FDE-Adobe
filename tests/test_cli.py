@@ -125,6 +125,22 @@ class CliTests(TempDirTestCase):
         for value in ("1111222233334444", "ana@example.com", "+40722123456", "Gheorghe", "Maria"):
             self.assertNotIn(value, text)
 
+    def test_memory_limit_exit_4(self):
+        """AC-65: memory above the stop share ends the run with MEMORY_LIMIT, exit 4, nothing published."""
+        with mock.patch("ingest.ops.peak_memory_mb", return_value=10**9):
+            code, _, err = self.cli(self.small_args())
+        self.assertEqual(code, 4)
+        self.assertIn("ERROR MEMORY_LIMIT", err)
+        self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
+
+    def test_threshold_warning_in_outputs(self):
+        """AC-52: a rejection rate above the threshold is a run warning in warnings.csv and a summary flag."""
+        code, _, err = self.cli(self.small_args("--rejection-threshold", "5"))
+        self.assertEqual(code, 0, err)
+        folder = self.only_run_folder()
+        self.assertIn("REJECTION_RATE_HIGH", (folder / "warnings.csv").read_text())
+        self.assertTrue(json.loads((folder / "run_summary.json").read_text())["flags"]["rejection_rate_high"])
+
     def test_mapping_pending_exit_3(self):
         """AC-21: a proposal stops the run with exit 3 and nothing published."""
         data = (FIXTURES / "small.csv").read_text().replace("card_number,", "NrCl,", 1)

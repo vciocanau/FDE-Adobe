@@ -12,11 +12,12 @@ STAGE = "read"
 _NEWLINE = re.compile(r"\r\n|\r|\n")
 
 
-def read_file(path: Path) -> ReadResult:
+def read_file(path: Path, check=None) -> ReadResult:
+    """Read the input; `check` is called every 10,000 records (memory guard, spec 10.3)."""
     data = _load(path)
     text = _decode(data)
     delimiter = _detect_delimiter(_NEWLINE.split(text, 1)[0])
-    return _read_records(text, delimiter)
+    return _read_records(text, delimiter, check)
 
 
 def _load(path: Path) -> bytes:
@@ -69,7 +70,7 @@ def _clean_header(cells: list[str]) -> tuple[list[str], list[Warning]]:
 MAX_RECORD_LINES = 5
 
 
-def _read_records(text: str, delimiter: str) -> ReadResult:
+def _read_records(text: str, delimiter: str, check=None) -> ReadResult:
     csv.field_size_limit(2**31 - 1)
     lines = _NEWLINE.split(text)
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter, strict=True)
@@ -96,6 +97,8 @@ def _read_records(text: str, delimiter: str) -> ReadResult:
         if span > MAX_RECORD_LINES:
             raise _unclosed(start)
         number += 1
+        if check and number % 10_000 == 0:
+            check()
         original = _original(lines, start, reader.line_num)
         if span > 1:
             warnings.append(Warning(number, None, "MULTILINE_RECORD"))

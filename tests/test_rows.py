@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 from itertools import product
 
 from ingest.models import ColumnMap, RawRecord, ReadResult
-from ingest.rows import process
+from ingest.models import Outcome, Rejected
+from ingest.rows import process, run_flags
 
 RUN = datetime(2026, 11, 5, 12, 0, tzinfo=timezone(timedelta(hours=2)))
 HEADER = ["card_number", "consent", "subscription", "email", "app_installed", "last_interaction_at", "Religie"]
@@ -151,6 +152,33 @@ class RowTests(unittest.TestCase):
         out = self.process(HEADER, records)
         self.assertEqual(out.canonical[0]["Religie"], "Ortodox")
         self.assertIn((1, "Religie", "CONTROL_CHARACTER_REMOVED"), [(w.record, w.field, w.code) for w in out.warnings])
+
+
+DEFAULTS = {"missing_contact_pct": 3, "rejection_pct": 10, "memory_warn_pct": 50, "memory_stop_pct": 80}
+
+
+def outcome(canonical, without_contact=0, rejected=0):
+    rows = [{"ineligibility_reasons": "NO_CONTACT_CHANNEL" if i < without_contact else ""} for i in range(canonical)]
+    return Outcome(rows, [Rejected(i, ["CARD_EMPTY"], "") for i in range(rejected)], [], [])
+
+
+class ThresholdTests(unittest.TestCase):
+    def codes(self, out, received):
+        return [w.code for w in run_flags(out, received, DEFAULTS)]
+
+    def test_missing_contact_threshold(self):
+        """AC-51: above 3% of canonical customers without a channel: MISSING_CONTACT_THRESHOLD; at 3%: none."""
+        self.assertIn("MISSING_CONTACT_THRESHOLD", self.codes(outcome(100, without_contact=4), 100))
+        self.assertNotIn("MISSING_CONTACT_THRESHOLD", self.codes(outcome(100, without_contact=3), 100))
+
+    def test_rejection_rate(self):
+        """AC-52: more than 10% of received rows rejected: REJECTION_RATE_HIGH; the run is not stopped."""
+        self.assertIn("REJECTION_RATE_HIGH", self.codes(outcome(89, rejected=11), 100))
+        self.assertNotIn("REJECTION_RATE_HIGH", self.codes(outcome(90, rejected=10), 100))
+
+    def test_all_cards_empty_flags_rejection(self):
+        """Review Focus 4: every row rejected gives REJECTION_RATE_HIGH and no division error."""
+        self.assertIn("REJECTION_RATE_HIGH", self.codes(outcome(0, rejected=3), 3))
 
 
 if __name__ == "__main__":

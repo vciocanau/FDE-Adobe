@@ -119,3 +119,29 @@ def setup_log(log_path: Path, console: bool = True) -> logging.Logger:
         handler.setFormatter(_Formatter())
         logger.addHandler(handler)
     return logger
+
+
+class MemoryGuard:
+    """Spec 10.3: warn once above the warning share of total memory, stop above the stop share."""
+
+    def __init__(self, warn_pct: float, stop_pct: float, total_mb: float | None):
+        self.warn_pct, self.stop_pct, self.total_mb = warn_pct, stop_pct, total_mb
+        self._warned = self._unknown_reported = False
+
+    def check(self, stage: str) -> list[str]:
+        if self.total_mb is None:
+            if self._unknown_reported:
+                return []
+            self._unknown_reported = True
+            return ["MEMORY_TOTAL_UNKNOWN"]
+        peak = peak_memory_mb()
+        if peak is None:
+            return []
+        share = 100 * peak / self.total_mb
+        if share > self.stop_pct:
+            from ingest.errors import RunError
+            raise RunError("MEMORY_LIMIT", f"Memory use passed {self.stop_pct:g}% of total memory; run stopped", stage)
+        if share > self.warn_pct and not self._warned:
+            self._warned = True
+            return ["MEMORY_WARNING"]
+        return []
