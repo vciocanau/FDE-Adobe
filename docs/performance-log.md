@@ -49,6 +49,8 @@ The process peak is now read on Windows. Both estimates are above the measured p
 
 Generating the synthetic files took 2.2 s (1x), 21.6 s (10x) and 208.4 s (100x).
 
+The full test suite on this machine: 147 tests, 146 passed including `test_windows_memory` (spec 10.3 step 6), and AC-36 stopped on the missing time-zone database (`tzdata` is not installed, D18). That test now skips on such a system, as the run already does.
+
 ### 100x with the estimate and the stop disabled
 
 An experiment, not a supported setting: the 10,000,000-record file was run with the memory estimate and the stop switched off in a local script, to see where the run fails on this machine.
