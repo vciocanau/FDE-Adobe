@@ -118,21 +118,34 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 146 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 158 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
-These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator. The full record, with dates and the runs before and after the memory estimate, is in [`docs/performance-log.md`](docs/performance-log.md).
+Measured runs with synthetic files from the generator (seed 42, same files on both machines, same counts on both). Full record, with the runs before and after each fix: [`docs/performance-log.md`](docs/performance-log.md).
 
-| Run | Records | Input | read | clean | write | verify | total | peak memory | outcome |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | published |
-| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | published |
-| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | clean stop, `MEMORY_LIMIT`, exit 4 |
+**Cloud sandbox:** Linux, 2 CPUs, 8 GB RAM, Python 3.13
 
-Time grows linearly with the number of records. Memory is about 39 MB per MB of input at 1x and 29 at 10x, because part of it is a fixed cost. Before reading, the run estimates its peak at 40 MB per MB of input. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run was killed by the operating system after 19 s, before the first memory check. Volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
+| Run | Records | Input | read | clean | write | verify | total | peak memory | peak / input | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | 39 | published |
+| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | 29 | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | – | `MEMORY_LIMIT`, exit 4, before reading |
 
-On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run took 8.8 s with a peak of 340 MB and the 10x run 81.2 s with a peak of 3.2 GB, with the same counts; the 100x run stopped in 0.2 s with `MEMORY_LIMIT` before reading. With the estimate and the stop disabled, the 100x run filled physical memory, used the page file, and failed after 176 s in the read stage with `MemoryError`; this is now reported as `MEMORY_LIMIT` (exit 4). The same runs showed that the process peak was not read on Windows; this is fixed. Details in [`docs/performance-log.md`](docs/performance-log.md).
+**Windows desktop:** Windows 10, Intel Core i5-6500 (4 cores), 16 GB RAM, Python 3.14
+
+| Run | Records | Input | read | clean | write | verify | total | peak memory | peak / input | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.7 s | 7.0 s | 0.5 s | 0.6 s | 8.8 s | 340 MB | 30 | published |
+| 10x | 1,000,000 | 112 MB | 8.6 s | 63.6 s | 5.1 s | 3.8 s | 81.2 s | 3.2 GB | 29 | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.2 s | – | – | `MEMORY_LIMIT`, exit 4, before reading |
+| 100x, stop disabled (experiment) | 10,000,000 | 1.1 GB | failed after 176 s in read | – | – | – | – | memory and page file full | – | `MemoryError`, now reported as `MEMORY_LIMIT`, exit 4 |
+
+Each canonical, rejected and duplicate count is the same on both machines. Time grows linearly with the number of records; the clean stage is about 1.5 times slower on the desktop.
+
+Before reading, the run estimates its peak at 40 MB of memory per MB of input. The measured ratio was 29 to 39 on both machines, so the estimate is on the safe side. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run had different endings on the two machines. On Linux the operating system killed it after 19 s. On Windows it filled memory and the page file for 3 minutes and then failed with `MemoryError`. The 100x file needs about 44 GB, so volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
+
+The full test suite also passes on the Windows desktop, including the Windows memory reading.
 
 ## Known limitations
 

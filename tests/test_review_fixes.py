@@ -178,3 +178,63 @@ class CoverageTests(ReviewFixTests):
                                        (fields.SUBSCRIPTION_INACTIVE, fields.clean_subscription, "inactive")]:
             for value in values:
                 self.assertEqual(func(f"  {value.upper()} ").value, expected, value)
+
+
+class ExternalReviewTests(ReviewFixTests):
+    """Findings of an external review of the published branch."""
+
+    def test_threshold_decision_is_the_same_in_csv_and_json(self):
+        """AC-51: 30 of 999 customers without contact (3.003%) is above 3% in warnings.csv and in the summary."""
+        rows = ["card_number,consent,subscription,email"]
+        for i in range(999):
+            rows.append(f"{1000000000000000 + i},da,activ,{'' if i < 30 else 'a@b.ro'}")
+        code, err = self.run_cli("\n".join(rows) + "\n")
+        self.assertEqual(code, 0, err)
+        folder = next(self.out.glob("run_*"))
+        self.assertIn("MISSING_CONTACT_THRESHOLD", (folder / "warnings.csv").read_text())
+        summary = json.loads((folder / "run_summary.json").read_text())
+        self.assertTrue(summary["flags"]["source_probably_broke"])
+
+    def test_rejection_decision_is_the_same_in_csv_and_json(self):
+        """AC-52: the rejection flag in the summary follows the same decision as the warning."""
+        rows = ["card_number,email"] + [f"{1000000000000000 + i},a@b.ro" for i in range(899)] + [",x"] * 101
+        code, err = self.run_cli("\n".join(rows) + "\n")
+        folder = next(self.out.glob("run_*"))
+        in_csv = "REJECTION_RATE_HIGH" in (folder / "warnings.csv").read_text()
+        self.assertEqual(json.loads((folder / "run_summary.json").read_text())["flags"]["rejection_rate_high"], in_csv)
+        self.assertTrue(in_csv)
+
+    def test_two_runs_in_the_same_second_keep_their_own_folders(self):
+        """Spec 8 and D17: a run that fails never deletes another run's temporary folder."""
+        from unittest import mock
+        from datetime import datetime, timezone
+        fixed = datetime(2026, 11, 5, 8, 33, tzinfo=timezone.utc)
+        self.out.mkdir()
+        other = self.out / ".tmp_run_2026-11-05_083300Z"
+        other.mkdir()
+        (other / "canonical_customers.csv").write_text("other run")
+        with mock.patch("ingest.cli.datetime") as dt:
+            dt.now.return_value = fixed
+            dt.fromtimestamp = datetime.fromtimestamp
+            code, err = self.run_cli("card_number,email\n1111222233334444,a@b.ro\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual((other / "canonical_customers.csv").read_text(), "other run")
+
+    def test_temporary_folder_is_private_before_any_write(self):
+        """Spec 8 (D26): the temporary folder is owner-only from the moment it is created."""
+        import os
+        import stat
+        from unittest import mock
+        if os.name != "posix":
+            self.skipTest("POSIX only")
+        seen = []
+        real = __import__("ingest.writer", fromlist=["write_canonical"]).write_canonical
+
+        def spy(temp, *args, **kwargs):
+            seen.append(stat.S_IMODE(temp.stat().st_mode))
+            return real(temp, *args, **kwargs)
+
+        with mock.patch("ingest.writer.write_canonical", side_effect=spy):
+            code, err = self.run_cli("card_number,email\n1111222233334444,a@b.ro\n")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(seen, [0o700])

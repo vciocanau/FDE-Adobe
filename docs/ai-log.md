@@ -50,6 +50,9 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 11 | Several acceptance cases proven only in part | Independent review | Tests extended for AC-11, AC-25, AC-37, AC-38, AC-42, AC-51, AC-63, AC-66 |
 
 | 12 | A memory-per-input ratio of 35, computed with the file size in decimal MB | Re-measurement asked by the owner, with sizes in MiB: 39 at 1x, 29 at 10x | Ratio set to 40; runs recorded in `docs/performance-log.md` |
+| 13 | A threshold flag in `run_summary.json` decided on the rounded percentage (3.003% shown as 3.00%, not above 3%), while `warnings.csv` decided on the exact value, so the two files disagreed | External review of the published branch (another AI model, run by the owner) | The flags in the summary follow the same decision as the warnings; regression tests for both thresholds |
+| 14 | A temporary folder named by the second: a second run started in the same second failed and deleted the first run's folder | External review | Each run creates its own unique folder and removes only that folder; regression test |
+| 15 | The temporary folder was made owner-only after the data was written into it | External review | The folder is created owner-only before any write; regression test |
 
 ## Memory guard at 100x
 
