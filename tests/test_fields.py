@@ -1,6 +1,6 @@
 import unittest
 
-from ingest.fields import clean_card, clean_name
+from ingest.fields import clean_card, clean_email, clean_name, clean_phone
 
 
 class CardTests(unittest.TestCase):
@@ -44,6 +44,37 @@ class NameTests(unittest.TestCase):
         """AC-31: an empty name stays empty with no warning; only control characters give the warning."""
         self.assertEqual((clean_name("").value, clean_name("").codes), ("", []))
         self.assertEqual(clean_name("\x01\x02").codes, ["CONTROL_CHARACTER_REMOVED"])
+
+
+class PhoneTests(unittest.TestCase):
+    def test_romanian_forms(self):
+        """AC-32: 0722123456, 0040722123456 and +40722123456 give +40722123456."""
+        for raw in ["0722123456", "0040722123456", "+40722123456", "0722 123 456", "(0722)-123.456"]:
+            self.assertEqual(clean_phone(raw).value, "+40722123456", raw)
+
+    def test_lost_leading_zero(self):
+        """AC-32: a nine-digit number starting with 7 gets +40 and PHONE_LEADING_ZERO."""
+        r = clean_phone("722123456")
+        self.assertEqual((r.value, r.codes), ("+40722123456", ["PHONE_LEADING_ZERO"]))
+
+    def test_other_country_and_invalid(self):
+        """AC-32: another country prefix is kept; 12345 is emptied with PHONE_INVALID; empty stays empty."""
+        self.assertEqual(clean_phone("+4915112345678").value, "+4915112345678")
+        self.assertEqual((clean_phone("12345").value, clean_phone("12345").codes), ("", ["PHONE_INVALID"]))
+        self.assertEqual(clean_phone("").codes, [])
+
+
+class EmailTests(unittest.TestCase):
+    def test_trim_and_lowercase(self):
+        """AC-33: an email with surrounding spaces and capitals is trimmed and lowercased."""
+        self.assertEqual(clean_email(" Ana@Example.COM ").value, "ana@example.com")
+
+    def test_invalid(self):
+        """AC-33: a space inside, two @ or no dot after the @ empties the email with EMAIL_INVALID."""
+        for raw in ["ana @example.com", "ana@@example.com", "ana@example"]:
+            r = clean_email(raw)
+            self.assertEqual((r.value, r.codes), ("", ["EMAIL_INVALID"]), raw)
+        self.assertEqual(clean_email("").codes, [])
 
 
 if __name__ == "__main__":
