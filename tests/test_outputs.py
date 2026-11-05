@@ -1,10 +1,13 @@
 import csv
 import json
+import os
+import stat
 import unittest
+import unittest.mock
 
 from ingest.errors import RunError
 from ingest.models import ColumnMap, Duplicate, Outcome, Rejected, Warning
-from ingest.publish import discard, publish, verify
+from ingest.publish import discard, publish, restrict_permissions, verify
 from ingest.rows import OUTPUT_COLUMNS
 from ingest.writer import build_summary, write_outputs
 from tests.helpers import TempDirTestCase
@@ -143,6 +146,28 @@ class OutputTests(TempDirTestCase):
         self.write_outputs_only(self.clean_outcome())
         discard(self.temp, debug=False, failed_name="failed_2026-11-05_083300Z")
         self.assertFalse(self.temp.exists())
+
+
+    @unittest.skipIf(os.name != "posix", "POSIX only")
+    def test_owner_only_permissions(self):
+        """AC-66: on POSIX the run folder is 0700 and its files 0600."""
+        self.write_outputs_only(self.clean_outcome())
+        self.assertEqual(restrict_permissions(self.temp), [])
+        publish(self.temp, self.run_folder)
+        self.assertEqual(stat.S_IMODE(self.run_folder.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE((self.run_folder / "warnings.csv").stat().st_mode), 0o600)
+
+    def test_permissions_skipped_elsewhere(self):
+        """AC-66: without POSIX permissions the check is skipped with PERMISSIONS_SKIPPED."""
+        self.write_outputs_only(self.clean_outcome())
+        with unittest.mock.patch("ingest.publish.os.name", "nt"):
+            self.assertEqual([w.code for w in restrict_permissions(self.temp)], ["PERMISSIONS_SKIPPED"])
+
+    def test_debug_keeps_failed_folder(self):
+        """AC-63: with --debug the temporary folder is kept as failed_YYYY-MM-DD_HHMMSSZ."""
+        self.write_outputs_only(self.clean_outcome())
+        discard(self.temp, debug=True, failed_name="failed_2026-11-05_083300Z")
+        self.assertTrue((self.out / "failed_2026-11-05_083300Z" / "warnings.csv").exists())
 
 
 if __name__ == "__main__":

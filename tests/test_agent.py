@@ -52,6 +52,20 @@ class AgentInputTests(TempDirTestCase):
         self.assertEqual(agent.calls, [("NrCl", ["9999999999999999"] * 3)])
 
 
+class BrokenAgent:
+    def propose(self, column, samples):
+        raise RuntimeError("agent unavailable")
+
+
+class FallbackTests(unittest.TestCase):
+    def test_agent_failure_falls_back(self):
+        """AC-23: if the agent fails, the dictionary alone is used with MAPPING_AGENT_FALLBACK."""
+        maps, proposals, warnings = map_header_with_samples(["NrCl", "card"], [], load_dictionary(DICTIONARY), BrokenAgent())
+        self.assertEqual(proposals, [])
+        self.assertEqual([w.code for w in warnings], ["MAPPING_AGENT_FALLBACK"])
+        self.assertEqual([m.field for m in maps], [None, "card_number"])
+
+
 class ProposalTests(TempDirTestCase):
     def setUp(self):
         super().setUp()

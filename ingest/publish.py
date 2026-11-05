@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 from ingest.errors import RunError
+from ingest.models import Warning
 from ingest.writer import DUPLICATE_COLUMNS, REJECTED_COLUMNS, WARNING_COLUMNS
 
 STAGE = "verify"
@@ -55,3 +56,13 @@ def discard(temp: Path, debug: bool, failed_name: str) -> None:
         os.rename(temp, temp.parent / failed_name)
     else:
         shutil.rmtree(temp, ignore_errors=True)
+
+
+def restrict_permissions(folder: Path) -> list[Warning]:
+    """Spec 8 (D26): run folder and files readable only by their owner where the system supports it."""
+    if os.name != "posix":
+        return [Warning(None, None, "PERMISSIONS_SKIPPED")]
+    for path in folder.iterdir():
+        path.chmod(0o600)
+    folder.chmod(0o700)
+    return []

@@ -163,6 +163,8 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
     _log_stage(log, "verify", timer)
 
     state["stage"] = "write"
+    for w in publish.restrict_permissions(temp):
+        log.warning("file permissions cannot be restricted on this system", extra={"stage": "write", "code": w.code})
     run_folder = args.output / run_id
     publish.publish(temp, run_folder)
     for w in outcome.warnings:

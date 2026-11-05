@@ -106,6 +106,14 @@ class CliTests(TempDirTestCase):
         self.assertIn("ERROR OUTPUT_NOT_WRITABLE [stage write]", err)
         self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
 
+    def test_debug_keeps_failed_folder(self):
+        """AC-63: with --debug a failed run keeps its temporary folder as failed_..Z; nothing is published."""
+        with mock.patch("ingest.writer.write_duplicates", side_effect=OSError("disk full")):
+            code, _, _ = self.cli(self.small_args("--debug"))
+        self.assertEqual(code, 2)
+        self.assertEqual(self.run_folders(), [])
+        self.assertRegex(self.temp_folders()[0].name, r"^failed_\d{4}-\d{2}-\d{2}_\d{6}Z$")
+
     def test_same_input_twice_same_files(self):
         """AC-60: the same input run twice gives the same files."""
         self.cli(self.small_args())

@@ -97,8 +97,14 @@ def map_header_with_samples(header: list[str], rows: list[list[str]], dictionary
                 break
         return values
 
-    maps, proposals = map_header(header, dictionary, lambda column, taken: agent.propose(column, samples(column)),
-                                 approved)
+    try:
+        maps, proposals = map_header(header, dictionary,
+                                     lambda column, taken: agent.propose(column, samples(column)), approved)
+    except RunError:
+        raise
+    except Exception:  # D25: the run must not depend on the agent
+        maps, proposals = map_header(header, dictionary, None, approved)
+        return maps, proposals, [Warning(None, None, "MAPPING_AGENT_FALLBACK")]
     return maps, proposals, []
 
 
