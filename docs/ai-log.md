@@ -53,3 +53,7 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 ## Memory guard at 100x
 
 The AI offered two options: a memory estimate before reading, or documentation only. The owner chose the estimate and asked for the 1x, 10x and 100x runs to be repeated and logged to validate it. It was added as the OpenSpec change `add-preflight-memory-check`. The 100x run now stops cleanly with `MEMORY_LIMIT` before reading.
+
+## Desktop runs on Windows
+
+The owner asked for the 100x run on a 16 GB Windows desktop with the memory stop removed, to see whether it fails there too and how long it lasts. The AI ran it with the estimate and the stop disabled in a local script, outside the repository. The run failed after 176 s with `MemoryError`, reported as `INTERNAL_ERROR`. The owner approved reporting it as `MEMORY_LIMIT` instead (OpenSpec change `report-memory-error-as-limit`). The same runs showed `peak memory None MB` on every stage: the Windows peak reading had never worked, so the memory thresholds did not apply on Windows; it is fixed in the same change.

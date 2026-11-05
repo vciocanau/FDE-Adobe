@@ -24,6 +24,32 @@ Finding: the first estimate used 35 MB per MB, computed with the file size in de
 
 The ratio falls as the file grows because part of the memory is a fixed cost of the program. A fitted line (fixed cost plus a slope) would estimate large files more closely; with only two points it is not done.
 
-## Owner's machine
+## 2026-11-05, desktop: Windows 10 (19045), Intel Core i5-6500 at 3.2 GHz (4 cores), 16,341 MB RAM, Python 3.14.10
 
-To be filled from the run on the Windows laptop: the same three runs, with machine, Python version and the log lines `estimated peak` and `Measured peak`.
+These runs used the code from before the memory estimate (commit before `add-preflight-memory-check`), the version on the desktop at the time. Every stage logged `peak memory None MB`: the process peak was not read on Windows, so no peak figure exists for them. That defect is fixed in the change `report-memory-error-as-limit`; the runs are repeated with the fixed code below when available.
+
+| Run | Records | Input | read | clean | write | verify | Total (stages) | Wall clock | Peak | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11.2 MB | 0.7 s | 6.2 s | 0.5 s | 0.5 s | 7.9 s | 8.3 s | not read | published; canonical 99,096, rejected 291, duplicate losing 613 |
+| 10x | 1,000,000 | 112.1 MB | 8.4 s | 63.4 s | 5.1 s | 4.0 s | 80.8 s | 82.7 s | not read | published; canonical 990,887, rejected 3,023, duplicate losing 6,090 |
+
+The counts are the same as on the cloud sandbox, as expected with the same seed. The clean stage is about 1.5 times slower on this machine.
+
+Generating the synthetic files took 2.3 s (1x), 20.6 s (10x) and 198.5 s (100x, 1,121 MB).
+
+### 100x with the estimate and the stop disabled
+
+An experiment, not a supported setting: the 10,000,000-record file was run with the memory estimate and the stop switched off in a local script, to see where the run fails on this machine.
+
+| Time | Observation |
+| --- | --- |
+| 0 s | Run starts; about 6 GB of the machine's memory already in use by other programs |
+| ~10 s | Machine memory at 80% (12.8 of 16 GB) |
+| ~30 s | Physical memory at 95 to 100%; committed memory 23 of 29 GB; Windows moves memory to disk (system disk at 100%) |
+| 176 s | Python raises `MemoryError` in the read stage; the run ends with `INTERNAL_ERROR` (exit 5), no traceback, nothing published; the console window closes |
+
+Findings:
+- Unlike the Linux sandbox, where the operating system killed the process after 19 s (exit 137), Windows lets the process use the page file and Python gets a `MemoryError`, so the run can report the failure itself.
+- The failure was reported with the wrong code; it is now `MEMORY_LIMIT` with exit 4 (AC-69).
+- The memory checks every 10,000 records could not stop the run because the Windows peak reading did not work.
+- The file needs about 44 GB by the estimate; this machine offers 29 GB including the page file, so 100x needs the read and clean stages to stream records (D16).

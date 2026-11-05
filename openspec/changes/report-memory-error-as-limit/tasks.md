@@ -9,5 +9,5 @@
 
 ## 2. Documents and measurements
 
-- [ ] 2.1 Add the case to specification sections 9, 10.3 and 11 (AC-69), brainstorming D15, the OpenSpec main spec (sync) and the README.
+- [x] 2.1 Add the case to specification sections 9, 10.3 and 11 (AC-69), brainstorming D15, the OpenSpec main spec (sync) and the README.
 - [ ] 2.2 Record the desktop runs (1x, 10x, 100x with the estimate, and 100x with the estimate and the stop disabled) in `docs/performance-log.md`.
