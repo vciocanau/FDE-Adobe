@@ -1,7 +1,8 @@
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from ingest.fields import clean_card, clean_email, clean_name, clean_phone, parse_timestamp, timestamp_sort_key
+from ingest.fields import (clean_amount, clean_app, clean_card, clean_consent, clean_email, clean_name,
+                           clean_phone, clean_subscription, parse_timestamp, timestamp_sort_key)
 
 
 class CardTests(unittest.TestCase):
@@ -109,6 +110,49 @@ class DateTests(unittest.TestCase):
     def test_sort_key(self):
         """Spec 6.6 step 8: a date alone counts as 00:00:00 local time when compared."""
         self.assertLess(timestamp_sort_key("2026-11-04"), timestamp_sort_key("2026-11-04T00:00:01"))
+
+
+class StatusTests(unittest.TestCase):
+    def test_consent_yes_and_no(self):
+        """AC-37: listed consent values in mixed case and spacing give yes or no."""
+        for raw in ["Da", " YES ", "Opt-In", "opt in", "o.k", "1", "Accepted"]:
+            self.assertEqual(clean_consent(raw).value, "yes", raw)
+        for raw in ["nu", "Nu Doresc", "nu-doresc", "OPTOUT", "Retras", "0", "revoked"]:
+            self.assertEqual(clean_consent(raw).value, "no", raw)
+
+    def test_consent_unknown(self):
+        """AC-37 and Review Focus 5: empty, spaces only and nu accept are unknown with CONSENT_UNKNOWN."""
+        for raw in ["", "   ", "nu accept", "maybe"]:
+            r = clean_consent(raw)
+            self.assertEqual((r.value, r.codes), ("unknown", ["CONSENT_UNKNOWN"]), raw)
+
+    def test_subscription(self):
+        """AC-38: listed values give active or inactive; no separator folding for subscription."""
+        self.assertEqual(clean_subscription(" Activ ").value, "active")
+        self.assertEqual(clean_subscription("UNSUBSCRIBED").value, "inactive")
+        self.assertEqual(clean_subscription("INACTIV").value, "inactive")
+        for raw in ["", "opt-in", "   "]:
+            self.assertEqual(clean_subscription(raw).codes, ["SUBSCRIPTION_UNKNOWN"], raw)
+
+    def test_app_installed(self):
+        """Spec 6.9: yes, no or unknown with APP_INSTALLED_UNKNOWN."""
+        self.assertEqual(clean_app("Installed").value, "yes")
+        self.assertEqual(clean_app("NU").value, "no")
+        self.assertEqual(clean_app("").codes, ["APP_INSTALLED_UNKNOWN"])
+
+
+class AmountTests(unittest.TestCase):
+    def test_valid(self):
+        """AC-39: 12.50 and 12,50 give 12.50; a dot is stored, without rounding."""
+        for raw, value in [("12.50", "12.50"), ("12,50", "12.50"), (" 12.50 ", "12.50"), ("12,5", "12.5"), ("7", "7")]:
+            self.assertEqual(clean_amount(raw).value, value, raw)
+
+    def test_invalid(self):
+        """AC-39: negative, zero, currency, thousands separators and text are emptied."""
+        for raw in ["-12.50", "0", "0.00", "12 lei", "1,234", "1.234,50", "abc", "12.505"]:
+            r = clean_amount(raw)
+            self.assertEqual((r.value, r.codes), ("", ["PURCHASE_AMOUNT_INVALID"]), raw)
+        self.assertEqual(clean_amount("").codes, [])
 
 
 if __name__ == "__main__":

@@ -123,3 +123,59 @@ def _aware(moment: datetime, tz: tzinfo | None) -> datetime:
 def timestamp_sort_key(value: str, tz: tzinfo | None = None) -> datetime:
     """Aware datetime for comparing stored values; a date alone is 00:00:00 local time."""
     return _aware(datetime.fromisoformat(value), tz).astimezone(timezone.utc)
+
+
+CONSENT_YES = ["da", "yes", "y", "true", "1", "accept", "acept", "accepted", "opt-in", "optin", "ok"]
+CONSENT_NO = ["nu", "no", "n", "false", "0", "refuz", "refuzat", "refused", "opt-out", "optout",
+              "retras", "withdrawn", "revoked", "nu doresc"]
+SUBSCRIPTION_ACTIVE = ["active", "activ", "subscribed", "yes", "da", "y", "true", "1"]
+SUBSCRIPTION_INACTIVE = ["inactive", "inactiv", "unsubscribed", "no", "nu", "n", "false", "0"]
+APP_YES = ["yes", "da", "y", "true", "1", "installed"]
+APP_NO = ["no", "nu", "n", "false", "0"]
+STATUS_VALUES = frozenset(CONSENT_YES + CONSENT_NO + SUBSCRIPTION_ACTIVE + SUBSCRIPTION_INACTIVE + APP_YES + APP_NO)
+
+
+def _consent_key(value: str) -> str:
+    return "".join(ch for ch in value.strip().lower() if ch not in " -.")
+
+
+_CONSENT = {**{_consent_key(v): "yes" for v in CONSENT_YES}, **{_consent_key(v): "no" for v in CONSENT_NO}}
+
+
+def _lookup(raw: str, table: dict[str, str], key, unknown_code: str) -> FieldResult:
+    value, codes = _strip_control(raw)
+    result = table.get(key(value))
+    if result is None:
+        return FieldResult("unknown", codes + [unknown_code])
+    return FieldResult(result, codes)
+
+
+def clean_consent(raw: str) -> FieldResult:
+    """Spec 6.7: yes, no or unknown; spaces, hyphens and dots are ignored; whole value compared."""
+    return _lookup(raw, _CONSENT, _consent_key, "CONSENT_UNKNOWN")
+
+
+def clean_subscription(raw: str) -> FieldResult:
+    """Spec 6.8: active, inactive or unknown; trimmed and lowercased; whole value compared."""
+    table = {**{v: "active" for v in SUBSCRIPTION_ACTIVE}, **{v: "inactive" for v in SUBSCRIPTION_INACTIVE}}
+    return _lookup(raw, table, lambda v: v.strip().lower(), "SUBSCRIPTION_UNKNOWN")
+
+
+def clean_app(raw: str) -> FieldResult:
+    """Spec 6.9: yes, no or unknown; only yes is a contact channel."""
+    table = {**{v: "yes" for v in APP_YES}, **{v: "no" for v in APP_NO}}
+    return _lookup(raw, table, lambda v: v.strip().lower(), "APP_INSTALLED_UNKNOWN")
+
+
+def clean_amount(raw: str) -> FieldResult:
+    """Spec 6.10: a positive number with an optional decimal part of 1 or 2 digits."""
+    value, codes = _strip_control(raw)
+    value = value.strip()
+    if not value:
+        return FieldResult("", codes)
+    if not re.fullmatch(r"[0-9]+(?:[.,][0-9]{1,2})?", value, re.ASCII):
+        return FieldResult("", codes + ["PURCHASE_AMOUNT_INVALID"])
+    value = value.replace(",", ".")
+    if float(value) == 0:
+        return FieldResult("", codes + ["PURCHASE_AMOUNT_INVALID"])
+    return FieldResult(value, codes)
