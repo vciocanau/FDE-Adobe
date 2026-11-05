@@ -9,7 +9,7 @@ A command-line program that reads one customer-profile CSV export from a superma
 | Document | What it holds |
 | --- | --- |
 | [`docs/brainstorming/brainstorming.md`](docs/brainstorming/brainstorming.md) | Map of the problem, assumptions A1–A10, decisions D1–D30 with reasons, what was left out and why |
-| [`docs/specification/specification.md`](docs/specification/specification.md) | The contract: input, mapping, field rules, row processing, outputs, codes, operations, 68 acceptance cases (AC-01…AC-68) |
+| [`docs/specification/specification.md`](docs/specification/specification.md) | The contract: input, mapping, field rules, row processing, outputs, codes, operations, 69 acceptance cases (AC-01…AC-69) |
 | [`openspec/specs/ingestion/spec.md`](openspec/specs/ingestion/spec.md) | The same specification in OpenSpec form (requirements and WHEN/THEN scenarios) |
 | [`docs/plan/2026-11-05-ingest-plan.md`](docs/plan/2026-11-05-ingest-plan.md) | Implementation plan: 19 tasks, each with files, interfaces and the tests written before the code |
 | [`docs/ai-log.md`](docs/ai-log.md) | What the AI proposed and what was rejected or changed |
@@ -26,6 +26,41 @@ py -3.14 -m venv .venv
 $env:TZ = "Europe/Bucharest"
 .venv\Scripts\python -m unittest
 ```
+
+## Try it in one minute
+
+[`examples/crm_export_sample.csv`](examples/crm_export_sample.csv) is a small synthetic CRM export of 8 records, with invented people. It contains the usual problems: Romanian column names, a duplicate card, a missing card, a row with an extra cell, a phone that lost its leading 0, an invalid email, a zero amount, a customer with no contact channel and an unknown column.
+
+Download the project, then run from its folder:
+
+```
+git clone https://github.com/vciocanau/FDE-Adobe
+cd FDE-Adobe
+```
+
+Windows:
+
+```
+py -m ingest run --input examples\crm_export_sample.csv
+```
+
+macOS and Linux:
+
+```
+python3 -m ingest run --input examples/crm_export_sample.csv
+```
+
+The last line printed is `Run published: runs/run_<date>_<time>Z`. That folder holds five files:
+
+| File | What it holds for the sample |
+| --- | --- |
+| `canonical_customers.csv` | One cleaned row per card: 5 customers, of which 2 are eligible for a campaign, each with the reasons when it is not (consent refused, subscription inactive, no contact channel). |
+| `rejected_rows.csv` | The 2 records that cannot become customers (one without a card, one with an extra cell), kept in full with the reason. |
+| `duplicates.csv` | The 1 older record of a card that appears twice, with the record that won and why it lost. |
+| `warnings.csv` | The 7 things that were fixed or flagged without rejecting a record, such as the phone that lost its 0, the invalid email and the unknown column `Oras`. |
+| `run_summary.json` | The totals (8 received = 5 canonical + 2 rejected + 1 duplicate), how each column was mapped, the time and memory of each stage, and the flags. |
+
+The log of the run is in `runs/logs/`. Running the command again creates a new run folder next to the first one; nothing is overwritten.
 
 ## Run
 
@@ -118,21 +153,34 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 146 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 158 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-69) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
-These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator. The full record, with dates and the runs before and after the memory estimate, is in [`docs/performance-log.md`](docs/performance-log.md).
+Measured runs with synthetic files from the generator (seed 42, same files on both machines, same counts on both). Full record, with the runs before and after each fix: [`docs/performance-log.md`](docs/performance-log.md).
 
-| Run | Records | Input | read | clean | write | verify | total | peak memory | outcome |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | published |
-| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | published |
-| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | clean stop, `MEMORY_LIMIT`, exit 4 |
+**Cloud sandbox:** Linux, 2 CPUs, 8 GB RAM, Python 3.13
 
-Time grows linearly with the number of records. Memory is about 39 MB per MB of input at 1x and 29 at 10x, because part of it is a fixed cost. Before reading, the run estimates its peak at 40 MB per MB of input. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run was killed by the operating system after 19 s, before the first memory check. Volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
+| Run | Records | Input | read | clean | write | verify | total | peak memory | peak / input | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | 39 | published |
+| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | 29 | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | – | `MEMORY_LIMIT`, exit 4, before reading |
 
-On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run took 8.8 s with a peak of 340 MB and the 10x run 81.2 s with a peak of 3.2 GB, with the same counts; the 100x run stopped in 0.2 s with `MEMORY_LIMIT` before reading. With the estimate and the stop disabled, the 100x run filled physical memory, used the page file, and failed after 176 s in the read stage with `MemoryError`; this is now reported as `MEMORY_LIMIT` (exit 4). The same runs showed that the process peak was not read on Windows; this is fixed. Details in [`docs/performance-log.md`](docs/performance-log.md).
+**Windows desktop:** Windows 10, Intel Core i5-6500 (4 cores), 16 GB RAM, Python 3.14
+
+| Run | Records | Input | read | clean | write | verify | total | peak memory | peak / input | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.7 s | 7.0 s | 0.5 s | 0.6 s | 8.8 s | 340 MB | 30 | published |
+| 10x | 1,000,000 | 112 MB | 8.6 s | 63.6 s | 5.1 s | 3.8 s | 81.2 s | 3.2 GB | 29 | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.2 s | – | – | `MEMORY_LIMIT`, exit 4, before reading |
+| 100x, stop disabled (experiment) | 10,000,000 | 1.1 GB | failed after 176 s in read | – | – | – | – | memory and page file full | – | `MemoryError`, now reported as `MEMORY_LIMIT`, exit 4 |
+
+Each canonical, rejected and duplicate count is the same on both machines. Time grows linearly with the number of records; the clean stage is about 1.5 times slower on the desktop.
+
+Before reading, the run estimates its peak at 40 MB of memory per MB of input. The measured ratio was 29 to 39 on both machines, so the estimate is on the safe side. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run had different endings on the two machines. On Linux the operating system killed it after 19 s. On Windows it filled memory and the page file for 3 minutes and then failed with `MemoryError`. The 100x file needs about 44 GB, so volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
+
+The full test suite also passes on the Windows desktop, including the Windows memory reading.
 
 ## Known limitations
 

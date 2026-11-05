@@ -2,6 +2,7 @@
 import argparse
 import logging
 import sys
+from tempfile import mkdtemp
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -81,39 +82,39 @@ def main(argv: list[str] | None = None) -> int:
     for handler in log.handlers:
         if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
             handler.addFilter(_NoErrors())
-    temp = args.output / f".tmp_{run_id}"
-    state = {"stage": "read"}
+    state = {"stage": "read", "temp": None}
     try:
-        return _run(args, now_utc, run_id, temp, log, state)
+        return _run(args, now_utc, run_id, log, state)
     except RunError as err:
-        return _fail(err, log, temp, args, run_id)
+        return _fail(err, log, state["temp"], args, run_id)
     except MemoryError as exc:  # memory refused before a check could stop the run (spec 10.3)
         err = RunError("MEMORY_LIMIT", f"Memory ran out in stage {state['stage']}; run stopped", state["stage"])
-        return _fail(err, log, temp, args, run_id, exc)
+        return _fail(err, log, state["temp"], args, run_id, exc)
     except OSError as exc:
         if state["stage"] == "write":
             err = RunError("OUTPUT_NOT_WRITABLE", f"Output cannot be written in {args.output} ({exc})", "write")
         else:
             err = RunError("INTERNAL_ERROR", f"Unexpected error in stage {state['stage']}; see the log", state["stage"])
-        return _fail(err, log, temp, args, run_id, exc)
+        return _fail(err, log, state["temp"], args, run_id, exc)
     except Exception as exc:  # no traceback reaches the operator (D17)
         err = RunError("INTERNAL_ERROR", f"Unexpected error in stage {state['stage']}; see the log", state["stage"])
-        return _fail(err, log, temp, args, run_id, exc)
+        return _fail(err, log, state["temp"], args, run_id, exc)
     finally:
         for handler in list(log.handlers):
             handler.close()
             log.removeHandler(handler)
 
 
-def _fail(err: RunError, log, temp: Path, args, run_id: str, exc: Exception | None = None) -> int:
+def _fail(err: RunError, log, temp: Path | None, args, run_id: str, exc: Exception | None = None) -> int:
     detail = f" ({type(exc).__name__})" if exc else ""
     log.error(err.message + detail, extra={"stage": err.stage, "code": err.code})
-    publish.discard(temp, args.debug, "failed_" + run_id[len("run_"):])
+    if temp is not None:  # only the folder this run created is ever removed
+        publish.discard(temp, args.debug, "failed_" + run_id[len("run_"):])
     print(err, file=sys.stderr)
     return err.exit_code
 
 
-def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> int:
+def _run(args, now_utc: datetime, run_id: str, log, state: dict) -> int:
     timer = StageTimer()
     run_time = now_utc.astimezone()
     total_mb = total_memory_mb()
@@ -165,7 +166,9 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
 
     with timer.stage("write"):
         state["stage"] = "write"
-        temp.mkdir()
+        # A unique folder, created owner-only (0700 on POSIX) before any data is written into it.
+        temp = Path(mkdtemp(prefix=f".tmp_{run_id}_", dir=args.output))
+        state["temp"] = temp
         writer.write_outputs(temp, outcome, maps, writer.build_summary(stages=timer.results(), total_ms=timer.total_ms(), **common))
         check()
     _log_stage(log, "write", timer)
@@ -200,9 +203,11 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
              f"rejected {dest['rejected']}, duplicate losing {dest['duplicate_losing']}",
              extra={"stage": "verify", "code": "-"})
     peak = max((r["peak_memory_mb"] or 0) for r in timer.results().values())
-    if input_mb:
+    if input_mb >= 1:
         log.info(f"Measured peak {peak:.0f} MB for {input_mb:.1f} MB of input: {peak / input_mb:.1f} MB per MB of input",
                  extra={"stage": "verify", "code": "-"})
+    else:  # under 1 MB the fixed cost of the program dominates and a ratio would mislead
+        log.info(f"Measured peak {peak:.0f} MB; input under 1 MB, no ratio", extra={"stage": "verify", "code": "-"})
     print(f"Run published: {run_folder}")
     return 0
 

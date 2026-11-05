@@ -69,6 +69,7 @@ def build_summary(*, run_id: str, run_started_at: str, export_date: str, input_n
     reasons = Counter(code for r in outcome.canonical for code in r["ineligibility_reasons"].split(";") if code)
     observed = {"missing_contact_pct": _pct(no_contact, canonical), "rejection_pct": _pct(len(outcome.rejected), rows_received)}
     eligible = sum(r["eligible_for_campaign"] == "yes" for r in outcome.canonical)
+    warning_counts = Counter(w.code for w in outcome.warnings)
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
@@ -80,12 +81,13 @@ def build_summary(*, run_id: str, run_started_at: str, export_date: str, input_n
                          "duplicate_losing": len(outcome.duplicates),
                          "reconciled": canonical + len(outcome.rejected) + len(outcome.duplicates) == rows_received},
         "eligibility": {"eligible": eligible, "not_eligible": canonical - eligible, "reasons": dict(reasons)},
-        "warnings": {"total": len(outcome.warnings), "by_code": dict(Counter(w.code for w in outcome.warnings))},
+        "warnings": {"total": len(outcome.warnings), "by_code": dict(warning_counts)},
         "stages": stages,
         "total_duration_ms": total_ms,
         "total_memory_mb": total_memory_mb,
         "thresholds": thresholds,
         "observed": observed,
-        "flags": {"source_probably_broke": observed["missing_contact_pct"] > thresholds["missing_contact_pct"],
-                  "rejection_rate_high": observed["rejection_pct"] > thresholds["rejection_pct"]},
+        # The decision is taken once, on exact values, in rows.run_flags; the rounded percentages are for reading.
+        "flags": {"source_probably_broke": "MISSING_CONTACT_THRESHOLD" in warning_counts,
+                  "rejection_rate_high": "REJECTION_RATE_HIGH" in warning_counts},
     }
