@@ -203,9 +203,11 @@ def _run(args, now_utc: datetime, run_id: str, log, state: dict) -> int:
              f"rejected {dest['rejected']}, duplicate losing {dest['duplicate_losing']}",
              extra={"stage": "verify", "code": "-"})
     peak = max((r["peak_memory_mb"] or 0) for r in timer.results().values())
-    if input_mb:
+    if input_mb >= 1:
         log.info(f"Measured peak {peak:.0f} MB for {input_mb:.1f} MB of input: {peak / input_mb:.1f} MB per MB of input",
                  extra={"stage": "verify", "code": "-"})
+    else:  # under 1 MB the fixed cost of the program dominates and a ratio would mislead
+        log.info(f"Measured peak {peak:.0f} MB; input under 1 MB, no ratio", extra={"stage": "verify", "code": "-"})
     print(f"Run published: {run_folder}")
     return 0
 

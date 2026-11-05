@@ -27,6 +27,41 @@ $env:TZ = "Europe/Bucharest"
 .venv\Scripts\python -m unittest
 ```
 
+## Try it in one minute
+
+[`examples/crm_export_sample.csv`](examples/crm_export_sample.csv) is a small synthetic CRM export of 8 records, with invented people. It contains the usual problems: Romanian column names, a duplicate card, a missing card, a row with an extra cell, a phone that lost its leading 0, an invalid email, a zero amount, a customer with no contact channel and an unknown column.
+
+Download the project, then run from its folder:
+
+```
+git clone https://github.com/vciocanau/FDE-Adobe
+cd FDE-Adobe
+```
+
+Windows:
+
+```
+py -m ingest run --input examples\crm_export_sample.csv
+```
+
+macOS and Linux:
+
+```
+python3 -m ingest run --input examples/crm_export_sample.csv
+```
+
+The last line printed is `Run published: runs/run_<date>_<time>Z`. That folder holds five files:
+
+| File | What it holds for the sample |
+| --- | --- |
+| `canonical_customers.csv` | One cleaned row per card: 5 customers, of which 2 are eligible for a campaign, each with the reasons when it is not (consent refused, subscription inactive, no contact channel). |
+| `rejected_rows.csv` | The 2 records that cannot become customers (one without a card, one with an extra cell), kept in full with the reason. |
+| `duplicates.csv` | The 1 older record of a card that appears twice, with the record that won and why it lost. |
+| `warnings.csv` | The 7 things that were fixed or flagged without rejecting a record, such as the phone that lost its 0, the invalid email and the unknown column `Oras`. |
+| `run_summary.json` | The totals (8 received = 5 canonical + 2 rejected + 1 duplicate), how each column was mapped, the time and memory of each stage, and the flags. |
+
+The log of the run is in `runs/logs/`. Running the command again creates a new run folder next to the first one; nothing is overwritten.
+
 ## Run
 
 Windows:

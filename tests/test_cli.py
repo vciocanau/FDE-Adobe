@@ -160,9 +160,19 @@ class CliTests(TempDirTestCase):
         read.assert_not_called()
         self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
 
-    def test_ratio_logged(self):
-        """Change add-preflight-memory-check: the estimate and the measured ratio are logged."""
+    def test_ratio_not_logged_for_tiny_input(self):
+        """Spec 10.1: under 1 MB of input the ratio is not meaningful and is not logged as one."""
         self.cli(self.small_args())
+        log = next((self.out / "logs").glob("run_*.log")).read_text()
+        self.assertNotIn("MB per MB of input", log)
+        self.assertIn("Measured peak", log)
+
+    def test_ratio_logged(self):
+        """Change add-preflight-memory-check: the estimate and the measured ratio are logged for an input of 1 MB or more."""
+        from tools.generate_synthetic import generate
+        path = self.tmp / "syn.csv"
+        generate(rows=10_000, out=path, seed=1)
+        self.cli(["run", "--input", str(path), "--output", str(self.out), "--dictionary", str(self.dictionary)])
         log = next((self.out / "logs").glob("run_*.log")).read_text()
         self.assertIn("estimated peak", log)
         self.assertIn("MB per MB of input", log)
