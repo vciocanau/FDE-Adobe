@@ -123,7 +123,7 @@ These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13
 
 Time grows linearly with the number of records. Memory is about 39 MB per MB of input at 1x and 29 at 10x, because part of it is a fixed cost. Before reading, the run estimates its peak at 40 MB per MB of input. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run was killed by the operating system after 19 s, before the first memory check. Volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
 
-On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run took 7.9 s and the 10x run 80.8 s, with the same counts. With the estimate and the stop disabled, the 100x run filled physical memory, used the page file, and failed after 176 s in the read stage with `MemoryError`; this is now reported as `MEMORY_LIMIT` (exit 4). The same runs showed that the process peak was not read on Windows; this is fixed. Details in [`docs/performance-log.md`](docs/performance-log.md).
+On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run took 8.8 s with a peak of 340 MB and the 10x run 81.2 s with a peak of 3.2 GB, with the same counts; the 100x run stopped in 0.2 s with `MEMORY_LIMIT` before reading. With the estimate and the stop disabled, the 100x run filled physical memory, used the page file, and failed after 176 s in the read stage with `MemoryError`; this is now reported as `MEMORY_LIMIT` (exit 4). The same runs showed that the process peak was not read on Windows; this is fixed. Details in [`docs/performance-log.md`](docs/performance-log.md).
 
 ## Known limitations
 

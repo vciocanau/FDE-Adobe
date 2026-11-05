@@ -26,7 +26,7 @@ The ratio falls as the file grows because part of the memory is a fixed cost of 
 
 ## 2026-11-05, desktop: Windows 10 (19045), Intel Core i5-6500 at 3.2 GHz (4 cores), 16,341 MB RAM, Python 3.14.10
 
-These runs used the code from before the memory estimate (commit before `add-preflight-memory-check`), the version on the desktop at the time. Every stage logged `peak memory None MB`: the process peak was not read on Windows, so no peak figure exists for them. That defect is fixed in the change `report-memory-error-as-limit`; the runs are repeated with the fixed code below when available.
+These runs used the code from before the memory estimate (commit before `add-preflight-memory-check`), the version on the desktop at the time. Every stage logged `peak memory None MB`: the process peak was not read on Windows, so no peak figure exists for them. That defect is fixed in the change `report-memory-error-as-limit`; the runs are repeated with the fixed code below.
 
 | Run | Records | Input | read | clean | write | verify | Total (stages) | Wall clock | Peak | Outcome |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -36,6 +36,18 @@ These runs used the code from before the memory estimate (commit before `add-pre
 The counts are the same as on the cloud sandbox, as expected with the same seed. The clean stage is about 1.5 times slower on this machine.
 
 Generating the synthetic files took 2.3 s (1x), 20.6 s (10x) and 198.5 s (100x, 1,121 MB).
+
+### With the fixed code (change `report-memory-error-as-limit`)
+
+| Run | Records | Input | read | clean | write | verify | Total (stages) | Wall clock | Peak | Peak / input | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11.2 MB | 0.7 s | 7.0 s | 0.5 s | 0.6 s | 8.8 s | 9.5 s | 340 MB | 30.3 | published; canonical 99,096, rejected 291, duplicate losing 613; estimate 448 MB |
+| 10x | 1,000,000 | 112.1 MB | 8.6 s | 63.6 s | 5.1 s | 3.8 s | 81.2 s | 83.2 s | 3,192 MB | 28.5 | published; canonical 990,887, rejected 3,023, duplicate losing 6,090; estimate 4,483 MB |
+| 100x | 10,000,000 | 1,121 MB | – | – | – | – | – | 0.2 s | – | – | `MEMORY_LIMIT`, exit 4, before reading: estimate 44,826 MB above the limit of 13,073 MB |
+
+The process peak is now read on Windows. Both estimates are above the measured peak, so the ratio of 40 is on the safe side on this machine. The ratio is lower than on Linux (30 against 39 at 1x) because Windows reports the peak working set, which counts memory differently from the Linux resident set.
+
+Generating the synthetic files took 2.2 s (1x), 21.6 s (10x) and 208.4 s (100x).
 
 ### 100x with the estimate and the stop disabled
 
