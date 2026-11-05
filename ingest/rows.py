@@ -91,6 +91,8 @@ def _clean_record(cells, maps, run_time, number):
 
 def _resolve(group: list[dict]):
     """Spec 7.2: the most recent valid timestamp wins; ties and unusable timestamps go to the later record."""
+    if len(group) == 1:
+        return group[0], [], False
     def key(row):
         ts = row["last_interaction_at"]
         return (1, fields.timestamp_sort_key(ts), row["_number"]) if ts else (0, None, row["_number"])

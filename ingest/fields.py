@@ -1,6 +1,7 @@
 """Field rules (spec section 6). Every function takes the raw cell and returns a FieldResult."""
 import re
 import unicodedata
+from functools import lru_cache
 from datetime import datetime, timedelta, timezone, tzinfo
 
 from ingest.models import FieldResult
@@ -79,6 +80,7 @@ _DATE_TIME = re.compile(
 )
 
 
+@lru_cache(maxsize=1)
 def local_zone() -> tzinfo:
     """The local time zone of the machine, as a fixed offset."""
     return datetime.now().astimezone().tzinfo
@@ -140,6 +142,8 @@ def _consent_key(value: str) -> str:
 
 
 _CONSENT = {**{_consent_key(v): "yes" for v in CONSENT_YES}, **{_consent_key(v): "no" for v in CONSENT_NO}}
+_SUBSCRIPTION = {**{v: "active" for v in SUBSCRIPTION_ACTIVE}, **{v: "inactive" for v in SUBSCRIPTION_INACTIVE}}
+_APP = {**{v: "yes" for v in APP_YES}, **{v: "no" for v in APP_NO}}
 
 
 def _lookup(raw: str, table: dict[str, str], key, unknown_code: str) -> FieldResult:
@@ -157,14 +161,12 @@ def clean_consent(raw: str) -> FieldResult:
 
 def clean_subscription(raw: str) -> FieldResult:
     """Spec 6.8: active, inactive or unknown; trimmed and lowercased; whole value compared."""
-    table = {**{v: "active" for v in SUBSCRIPTION_ACTIVE}, **{v: "inactive" for v in SUBSCRIPTION_INACTIVE}}
-    return _lookup(raw, table, lambda v: v.strip().lower(), "SUBSCRIPTION_UNKNOWN")
+    return _lookup(raw, _SUBSCRIPTION, lambda v: v.strip().lower(), "SUBSCRIPTION_UNKNOWN")
 
 
 def clean_app(raw: str) -> FieldResult:
     """Spec 6.9: yes, no or unknown; only yes is a contact channel."""
-    table = {**{v: "yes" for v in APP_YES}, **{v: "no" for v in APP_NO}}
-    return _lookup(raw, table, lambda v: v.strip().lower(), "APP_INSTALLED_UNKNOWN")
+    return _lookup(raw, _APP, lambda v: v.strip().lower(), "APP_INSTALLED_UNKNOWN")
 
 
 def clean_amount(raw: str) -> FieldResult:
