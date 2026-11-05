@@ -48,6 +48,8 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 10 | A traceback when the log folder could not be created; column names (possibly personal data) in the log | Independent review | One operator line with `OUTPUT_NOT_WRITABLE`; the log names column positions; regression tests |
 | 11 | Several acceptance cases proven only in part | Independent review | Tests extended for AC-11, AC-25, AC-37, AC-38, AC-42, AC-51, AC-63, AC-66 |
 
+| 12 | A memory-per-input ratio of 35, computed with the file size in decimal MB | Re-measurement asked by the owner, with sizes in MiB: 39 at 1x, 29 at 10x | Ratio set to 40; runs recorded in `docs/performance-log.md` |
+
 ## Memory guard at 100x
 
-The decision on the 100x memory finding (a pre-flight check from the file size, or documentation only) is pending with the owner.
+The AI offered two options: a memory estimate before reading, or documentation only. The owner chose the estimate and asked for the 1x, 10x and 100x runs to be repeated and logged to validate it. It was added as the OpenSpec change `add-preflight-memory-check`. The 100x run now stops cleanly with `MEMORY_LIMIT` before reading.

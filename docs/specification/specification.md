@@ -527,6 +527,8 @@ Each stage (read, clean, write, verify) and the whole run are timed with a monot
 5. If the total cannot be read, the run gets `MEMORY_TOTAL_UNKNOWN`, the thresholds are skipped and `total_memory_mb` is `null`.
 6. The Windows reading is verified on a Windows machine before delivery.
 
+Before the input is read, the peak is estimated as 40 MB of memory per MB of input file; the measured ratio was 39 on the 100,000-record run and 29 on the 1,000,000-record run, rounded up to stay safe. If the estimate is above `--memory-stop` of total memory, the run stops at once with `MEMORY_LIMIT` and exit code 4, without reading the file and without publishing anything. When the total cannot be read, the estimate is skipped. Without this estimate a file too large to load ends the process before the first check at record 10,000, so the stop above could not happen.
+
 ## 11. Acceptance cases
 
 Each case becomes an automated test with a fixed expected result, and the work is not done until every test passes. Related cases may share one parametrized test. The cases come from the brainstorming (section 7) and follow the rules in sections 4 to 10 of this specification. Exit codes are in section 3 and codes in section 9.

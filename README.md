@@ -109,24 +109,24 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 143 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 146 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
-These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator.
+These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator. The full record, with dates and the runs before and after the memory estimate, is in [`docs/performance-log.md`](docs/performance-log.md).
 
-| Run | Records | read | clean | write | verify | total | peak memory |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1x | 100,000 | 0.6 s | 4.1 s | 0.4 s | 0.4 s | 5.5 s | 413 MB |
-| 10x | 1,000,000 | 7.1 s | 47.4 s | 4.4 s | 4.3 s | 63.3 s | 3.2 GB |
-| 100x | 10,000,000 | killed by the operating system after 19 s in the read stage | | | | | about 8 GB |
+| Run | Records | Input | read | clean | write | verify | total | peak memory | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | published |
+| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | clean stop, `MEMORY_LIMIT`, exit 4 |
 
-Time and memory grow linearly, at about 35 MB of memory per MB of input. **The 100x run was not stopped cleanly by the memory guard.** The whole file is loaded and split into lines before the first memory check at record 10,000, so the operating system ended the process first. This is the price of keeping all results in memory (D16). For 100x the read and clean stages have to stream records instead.
+Time grows linearly with the number of records. Memory is about 39 MB per MB of input at 1x and 29 at 10x, because part of it is a fixed cost. Before reading, the run estimates its peak at 40 MB per MB of input. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run was killed by the operating system after 19 s, before the first memory check. Volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
 
 ## Known limitations
 
 - A quote in the middle of an unquoted field (`5" pipe`) is read as text and not flagged. The standard CSV reader does not detect it (spec section 4).
-- The memory guard cannot stop a file too large to load (see Performance).
+- The memory estimate uses one ratio for every file. A customer file with much longer fields or many more columns may need a different ratio. The measured ratio is logged at the end of every run so that a mismatch shows.
 - A column that keeps its name but changes its meaning cannot be detected (spec section 5, Out of contract).
 - The repeated or skipped local hour is detected only where the system time-zone database is available. Windows has it only with the `tzdata` package; elsewhere the check is skipped silently.
 

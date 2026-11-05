@@ -141,6 +141,23 @@ class CliTests(TempDirTestCase):
         self.assertIn("ERROR MEMORY_LIMIT", err)
         self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
 
+    def test_preflight_stops_before_reading(self):
+        """Change add-preflight-memory-check: a file too large for memory stops with exit 4 before it is read."""
+        with mock.patch("ingest.cli.total_memory_mb", return_value=0.001), \
+                mock.patch("ingest.reader.read_file") as read:
+            code, _, err = self.cli(self.small_args())
+        self.assertEqual(code, 4)
+        self.assertIn("ERROR MEMORY_LIMIT [stage read]", err)
+        read.assert_not_called()
+        self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
+
+    def test_ratio_logged(self):
+        """Change add-preflight-memory-check: the estimate and the measured ratio are logged."""
+        self.cli(self.small_args())
+        log = next((self.out / "logs").glob("run_*.log")).read_text()
+        self.assertIn("estimated peak", log)
+        self.assertIn("MB per MB of input", log)
+
     def test_threshold_warning_in_outputs(self):
         """AC-52: a rejection rate above the threshold is a run warning in warnings.csv and a summary flag."""
         code, _, err = self.cli(self.small_args("--rejection-threshold", "5"))
