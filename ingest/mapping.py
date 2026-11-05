@@ -141,12 +141,23 @@ def write_proposal(output: Path, input_name: str, proposals: list[dict], now_utc
     return path
 
 
+def read_approval(path: Path) -> list[dict]:
+    """Spec 5: the approval file is a JSON object whose "proposals" is a list of objects; anything else is USAGE."""
+    def usage(reason: str) -> RunError:
+        return RunError("USAGE", f"Wrong arguments: --approve file {path} {reason}", "start")
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise usage("cannot be read as JSON") from None
+    proposals = data.get("proposals") if isinstance(data, dict) else None
+    if not isinstance(proposals, list) or not all(isinstance(p, dict) for p in proposals):
+        raise usage('has no "proposals" list of entries; use the proposal file written by the run')
+    return proposals
+
+
 def apply_approval(path: Path, header: list[str], dictionary_path: Path) -> dict[str, ColumnMap]:
     """Read the analyst's decisions; save approved and changed mappings in the dictionary."""
-    try:
-        proposals = json.loads(Path(path).read_text(encoding="utf-8"))["proposals"]
-    except (OSError, ValueError, KeyError, TypeError):
-        raise RunError("USAGE", f"Wrong arguments: --approve file cannot be read: {path}", "start") from None
+    proposals = read_approval(path)
     approved: dict[str, ColumnMap] = {}
     for p in proposals:
         column, decision = p.get("column"), (p.get("decision") or "").strip().lower()

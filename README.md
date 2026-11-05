@@ -153,7 +153,7 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 147 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-69) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 150 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-69) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
@@ -189,9 +189,7 @@ The full test suite also passes on the Windows desktop, including the Windows me
 - A column that keeps its name but changes its meaning cannot be detected (spec section 5, Out of contract).
 - The repeated or skipped local hour is detected only where the time-zone database is available. Windows has it only with the optional `tzdata` package and `TZ` set; without them the check is skipped silently.
 
-- Four small defects found by the final review and left as they are, because none of them loses or changes data:
-  - a file holding only a byte-order mark stops with `INTERNAL_ERROR` (exit 5) instead of `INPUT_EMPTY` (exit 1);
-  - an `--approve` file whose `proposals` entry is not a list stops with `INTERNAL_ERROR` (exit 5) instead of `USAGE` (exit 2), and the approval file is read after the input file instead of before it;
+- Two small defects left as they are, because neither loses or changes data:
   - `--debug` does not log progress every 10,000 records (spec 10.1 step 5);
   - a memory warning is written twice to the log.
 

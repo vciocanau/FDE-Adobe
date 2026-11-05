@@ -276,3 +276,46 @@ class MissingOptionalColumnTests(CliCase):
                 summary = json.loads(next(self.out.glob("run_*/run_summary.json")).read_text())
                 self.assertEqual(summary["destinations"],
                                  {"canonical": 1, "rejected": 0, "duplicate_losing": 1, "reconciled": True})
+
+
+class InputValidationTests(CliCase):
+    """Spec 3 and 4: malformed inputs stop with their own code, never INTERNAL_ERROR."""
+
+    def test_file_with_only_a_bom_is_empty(self):
+        """AC-03: a file holding only a byte-order mark is empty: INPUT_EMPTY, exit 1."""
+        path = self.write(b"\xef\xbb\xbf")
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = main(["run", "--input", str(path), "--output", str(self.out), "--dictionary", str(self.dictionary)])
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR INPUT_EMPTY", err.getvalue())
+
+    def approve_with(self, content: str):
+        approval = self.tmp / "approval.json"
+        approval.write_text(content)
+        return self.run_cli("card_number,email\n1111222233334444,a@b.ro\n", "--approve", str(approval))
+
+    def test_approval_file_structure_is_checked(self):
+        """Spec 3 and 5: an approval file whose proposals are not a list of objects is a USAGE error, exit 2."""
+        for content in ['{"proposals": {}}', '{"proposals": null}', '{"proposals": [1]}', '{"other": []}', "[]", "{bad"]:
+            with self.subTest(content=content):
+                shutil.rmtree(self.out, ignore_errors=True)
+                code, err = self.approve_with(content)
+                self.assertEqual(code, 2, err)
+                self.assertIn("ERROR USAGE", err)
+                self.assertFalse(self.out.exists() and any(self.out.glob("run_*")))
+
+    def test_approval_file_is_checked_before_the_input(self):
+        """Spec 3: arguments, including the approval file, are checked before the input is read."""
+        approval = self.tmp / "approval.json"
+        approval.write_text('{"proposals": {}}')
+        code, err = self.run_cli_missing_input(approval)
+        self.assertEqual(code, 2)
+        self.assertIn("ERROR USAGE", err)
+
+    def run_cli_missing_input(self, approval):
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = main(["run", "--input", str(self.tmp / "missing.csv"), "--output", str(self.out),
+                         "--dictionary", str(self.dictionary), "--approve", str(approval)])
+        return code, err.getvalue()

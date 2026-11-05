@@ -66,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     try:
         args = _parse(argv)
+        if args.approve:
+            mapping.read_approval(args.approve)  # spec 3: arguments are checked before any input is read
         _prepare_output(args.output)
     except RunError as err:
         print(err, file=sys.stderr)

@@ -55,6 +55,8 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 15 | The temporary folder was made owner-only after the data was written into it | External review | The folder is created owner-only before any write; regression test |
 | 16 | A cleaned row held only the fields of the columns present in the file, so a file without the optional `last_interaction_at` column and with a duplicated card stopped with `INTERNAL_ERROR` instead of applying the rule for missing timestamps (spec 7.2) | A test combining each absent optional column with a duplicated card | Every cleaned row starts with all canonical fields empty, so an absent column behaves like an empty one; regression tests for the reported case and for every optional column |
 | 17 | Test classes inherited from a class that already held tests, so some tests ran two to four times and the reported count was inflated | Counting test methods against the runner's total | Helpers moved to a base class without tests; each test now runs once (147) |
+| 18 | A file holding only a byte-order mark passed the zero-byte check and stopped with `INTERNAL_ERROR` | A listed known defect, reproduced with a test | After decoding, an input with no characters stops with `INPUT_EMPTY` (exit 1); regression test |
+| 19 | An approval file with `"proposals": {}` was accepted as "no approvals" (exit 0), other wrong shapes gave `INTERNAL_ERROR`, and the file was read after the input | A listed known defect, extended to every wrong shape | The approval file is checked with the arguments, before the input: anything but a list of entries is `USAGE` (exit 2); regression tests |
 
 ## Memory guard at 100x
 

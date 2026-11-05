@@ -57,7 +57,7 @@ The input is one CSV file given with `--input`. It is read strictly: a problem i
 
 - Encoding is UTF-8. A BOM at the start is accepted and ignored. A byte that is not valid UTF-8, anywhere in the file, stops the run with `INVALID_UTF8`; nothing is replaced automatically.
 - Line endings `LF`, `CRLF` and `CR` are all accepted. A line break inside a quoted field is kept as part of the value.
-- A file of zero bytes stops the run with `INPUT_EMPTY`. A file with a header and no records stops it with `NO_DATA_ROWS`.
+- A file of zero bytes, or holding only a byte-order mark, stops the run with `INPUT_EMPTY`. A file with a header and no records stops it with `NO_DATA_ROWS`.
 
 ### Delimiter
 
@@ -167,7 +167,7 @@ The analyst writes one of three decisions for each proposal:
 | `reject` | The column is passed through unchanged as an unknown column |
 | `change` | The field written in `use_field` is applied and saved in the dictionary; an unknown field name stops the run with `USAGE` |
 
-Columns with a score below 60 are listed too, with `field` empty, so that the analyst can map them with `change` if the meaning is known. They do not block the run, and if left empty they are passed through. A proposal with a score of 60 or more and no decision stops the run again with `MAPPING_PENDING`. The analyst runs again with `--approve <file>` (section 3).
+Columns with a score below 60 are listed too, with `field` empty, so that the analyst can map them with `change` if the meaning is known. They do not block the run, and if left empty they are passed through. A proposal with a score of 60 or more and no decision stops the run again with `MAPPING_PENDING`. The analyst runs again with `--approve <file>` (section 3). An approval file that is not a JSON object with a `proposals` list of entries stops the run with `USAGE` before the input is read.
 
 ### Out of contract
 

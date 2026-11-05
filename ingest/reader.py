@@ -16,6 +16,8 @@ def read_file(path: Path, check=None) -> ReadResult:
     """Read the input; `check` is called every 10,000 records (memory guard, spec 10.3)."""
     data = _load(path)
     text = _decode(data)
+    if not text:
+        raise RunError("INPUT_EMPTY", f"Input file is empty (only a byte-order mark): {path}", STAGE)
     delimiter = _detect_delimiter(_NEWLINE.split(text, 1)[0])
     return _read_records(text, delimiter, check)
 
