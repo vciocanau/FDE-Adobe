@@ -18,6 +18,15 @@ A command-line program that reads one customer-profile CSV export from a superma
 
 Python 3.11 or later. Nothing to install: the program and the tests use the standard library only.
 
+Optional on Windows: the `tzdata` package lets the run detect a timestamp in the hour that repeats or is skipped when the clock changes (`TIMESTAMP_AMBIGUOUS_HOUR`). Linux and macOS do not need it. Without it the run works the same and skips that check.
+
+```powershell
+py -3.14 -m venv .venv
+.venv\Scripts\python -m pip install tzdata
+$env:TZ = "Europe/Bucharest"
+.venv\Scripts\python -m unittest
+```
+
 ## Run
 
 Windows:
@@ -101,7 +110,7 @@ CRM CSV ──► read ──────────► clean ─────�
 - **Duplicates:** the most recent valid interaction wins. When the order cannot be known and the rows disagree on consent or subscription, the customer is not eligible (D20).
 - **Strict reading:** extra cells with values, text after a closing quote and an unclosed quote are diagnosed, never silently absorbed (D29).
 - **The mapping agent is simulated.** There is no API key. It sees only column names and masked samples, and it never approves a mapping by itself (D6, D8, D24).
-- **Zero dependencies** (D18).
+- **Zero dependencies** (D18); `tzdata` is optional on Windows.
 
 ## Tests
 
@@ -109,26 +118,28 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 143 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 146 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
-These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator.
+These are measured runs on a cloud sandbox (Linux, 2 CPUs, 8 GB RAM, Python 3.13) with synthetic files from the generator. The full record, with dates and the runs before and after the memory estimate, is in [`docs/performance-log.md`](docs/performance-log.md).
 
-| Run | Records | read | clean | write | verify | total | peak memory |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1x | 100,000 | 0.6 s | 4.1 s | 0.4 s | 0.4 s | 5.5 s | 413 MB |
-| 10x | 1,000,000 | 7.1 s | 47.4 s | 4.4 s | 4.3 s | 63.3 s | 3.2 GB |
-| 100x | 10,000,000 | killed by the operating system after 19 s in the read stage | | | | | about 8 GB |
+| Run | Records | Input | read | clean | write | verify | total | peak memory | outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1x | 100,000 | 11 MB | 0.8 s | 4.0 s | 0.4 s | 0.4 s | 5.5 s | 437 MB | published |
+| 10x | 1,000,000 | 112 MB | 8.4 s | 42.5 s | 4.6 s | 5.0 s | 60.6 s | 3.2 GB | published |
+| 100x | 10,000,000 | 1.1 GB | – | – | – | – | 0.1 s | – | clean stop, `MEMORY_LIMIT`, exit 4 |
 
-Time and memory grow linearly, at about 35 MB of memory per MB of input. **The 100x run was not stopped cleanly by the memory guard.** The whole file is loaded and split into lines before the first memory check at record 10,000, so the operating system ended the process first. This is the price of keeping all results in memory (D16). For 100x the read and clean stages have to stream records instead.
+Time grows linearly with the number of records. Memory is about 39 MB per MB of input at 1x and 29 at 10x, because part of it is a fixed cost. Before reading, the run estimates its peak at 40 MB per MB of input. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run was killed by the operating system after 19 s, before the first memory check. Volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
+
+On a Windows desktop (Intel Core i5-6500, 16 GB RAM, Python 3.14) the 1x run took 8.8 s with a peak of 340 MB and the 10x run 81.2 s with a peak of 3.2 GB, with the same counts; the 100x run stopped in 0.2 s with `MEMORY_LIMIT` before reading. With the estimate and the stop disabled, the 100x run filled physical memory, used the page file, and failed after 176 s in the read stage with `MemoryError`; this is now reported as `MEMORY_LIMIT` (exit 4). The same runs showed that the process peak was not read on Windows; this is fixed. Details in [`docs/performance-log.md`](docs/performance-log.md).
 
 ## Known limitations
 
 - A quote in the middle of an unquoted field (`5" pipe`) is read as text and not flagged. The standard CSV reader does not detect it (spec section 4).
-- The memory guard cannot stop a file too large to load (see Performance).
+- The memory estimate uses one ratio for every file. A customer file with much longer fields or many more columns may need a different ratio. The measured ratio is logged at the end of every run so that a mismatch shows.
 - A column that keeps its name but changes its meaning cannot be detected (spec section 5, Out of contract).
-- The repeated or skipped local hour is detected only where the system time-zone database is available. Windows has it only with the `tzdata` package; elsewhere the check is skipped silently.
+- The repeated or skipped local hour is detected only where the time-zone database is available. Windows has it only with the optional `tzdata` package and `TZ` set; without them the check is skipped silently.
 
 ## Not implemented
 

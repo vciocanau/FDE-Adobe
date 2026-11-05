@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from ingest.errors import RunError
-from ingest.ops import MemoryGuard, StageTimer, peak_memory_mb, setup_log, total_memory_mb
+from ingest.ops import MemoryGuard, estimate_peak_mb, StageTimer, peak_memory_mb, setup_log, total_memory_mb
 from tests.helpers import TempDirTestCase
 
 
@@ -56,6 +56,18 @@ class MemoryGuardTests(unittest.TestCase):
         with mock.patch("ingest.ops.peak_memory_mb", return_value=801), self.assertRaises(RunError) as e:
             guard.check("clean")
         self.assertEqual((e.exception.code, e.exception.exit_code, e.exception.stage), ("MEMORY_LIMIT", 4, "clean"))
+
+    def test_preflight(self):
+        """Change add-preflight-memory-check: 200 MB of input on 8,000 MB stops; 100 MB passes; unknown skips."""
+        self.assertEqual(estimate_peak_mb(200), 8000)
+        with self.assertRaises(RunError) as e:
+            MemoryGuard(50, 80, total_mb=8000).preflight(200)
+        self.assertEqual((e.exception.code, e.exception.exit_code, e.exception.stage), ("MEMORY_LIMIT", 4, "read"))
+        self.assertIn("200", e.exception.message)
+        self.assertEqual(MemoryGuard(50, 80, total_mb=8000).preflight(100), [])
+        guard = MemoryGuard(50, 80, total_mb=None)
+        self.assertEqual(guard.preflight(10_000), ["MEMORY_TOTAL_UNKNOWN"])
+        self.assertEqual(guard.check("read"), [])
 
     def test_unknown_total(self):
         """AC-65: an unknown total gives MEMORY_TOTAL_UNKNOWN once and skips the check."""

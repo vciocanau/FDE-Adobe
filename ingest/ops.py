@@ -47,10 +47,17 @@ def _windows_peak() -> float:
                     ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
                     ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t)]
 
+    # The process handle is pointer-sized; without these declarations ctypes passes it as a 32-bit int
+    # on 64-bit Windows and the call fails, so the peak was never read there.
+    kernel32, psapi = ctypes.WinDLL("kernel32"), ctypes.WinDLL("psapi")
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.argtypes = []
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+    psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS), wintypes.DWORD]
     counters = PROCESS_MEMORY_COUNTERS()
     counters.cb = ctypes.sizeof(counters)
-    process = ctypes.windll.kernel32.GetCurrentProcess()
-    if not ctypes.windll.psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+    process = kernel32.GetCurrentProcess()
+    if not psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
         raise OSError("GetProcessMemoryInfo failed")
     return counters.PeakWorkingSetSize / (1024 * 1024)
 
@@ -121,12 +128,33 @@ def setup_log(log_path: Path, console: bool = True) -> logging.Logger:
     return logger
 
 
+# Peak memory per MB (MiB) of input. Measured: 39 at 100,000 records, 29 at 1,000,000; rounded up to stay safe.
+MEMORY_PER_INPUT_MB = 40
+
+
+def estimate_peak_mb(input_mb: float) -> float:
+    return input_mb * MEMORY_PER_INPUT_MB
+
+
 class MemoryGuard:
     """Spec 10.3: warn once above the warning share of total memory, stop above the stop share."""
 
     def __init__(self, warn_pct: float, stop_pct: float, total_mb: float | None):
         self.warn_pct, self.stop_pct, self.total_mb = warn_pct, stop_pct, total_mb
         self._warned = self._unknown_reported = False
+
+    def preflight(self, input_mb: float) -> list[str]:
+        """Before reading: stop at once when the estimated peak is above the stop share of total memory."""
+        if self.total_mb is None:
+            return self.check("read")
+        estimate = estimate_peak_mb(input_mb)
+        limit = self.total_mb * self.stop_pct / 100
+        if estimate > limit:
+            from ingest.errors import RunError
+            raise RunError("MEMORY_LIMIT",
+                           f"Input of {input_mb:.0f} MB needs about {estimate:.0f} MB of memory, above the limit of "
+                           f"{limit:.0f} MB ({self.stop_pct:g}% of total memory); the file was not read", "read")
+        return []
 
     def check(self, stage: str) -> list[str]:
         if self.total_mb is None:

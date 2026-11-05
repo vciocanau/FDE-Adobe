@@ -224,7 +224,7 @@ Examples: `Ana@Example.COM` with surrounding spaces gives `ana@example.com`; `an
 4. A value that matches none of these formats, or is not a real calendar date (`13.13.2026`, `31.02.2026`), is emptied with the warning `TIMESTAMP_UNREADABLE`.
 5. A value outside the range that can be converted to UTC (for example year 0001 with an offset) is emptied with the warning `TIMESTAMP_OUT_OF_RANGE`.
 6. A value later than the time of the run is emptied with the warning `TIMESTAMP_IN_FUTURE`.
-7. A value with a time but no time zone is read in local time. If it falls in the hour that repeats when daylight saving time ends, or in the hour that is skipped when it starts, it is kept and the row gets the warning `TIMESTAMP_AMBIGUOUS_HOUR`.
+7. A value with a time but no time zone is read in local time. If it falls in the hour that repeats when daylight saving time ends, or in the hour that is skipped when it starts, it is kept and the row gets the warning `TIMESTAMP_AMBIGUOUS_HOUR`. The check needs the time-zone database: Linux and macOS have it; Windows needs the optional `tzdata` package and the `TZ` environment variable set to the zone name (for example `Europe/Bucharest`). Without them the check is skipped and the run continues (D18).
 8. A valid value is stored in ISO 8601: `YYYY-MM-DD` for a date alone, `YYYY-MM-DDTHH:MM:SS` for a date with a time, with the offset when the value had one. When timestamps are compared (duplicates, future check), a date alone counts as 00:00:00 local time.
 9. In every case the profile is kept; only the field is emptied.
 
@@ -443,7 +443,7 @@ A run error stops the run and prints one line: `ERROR <CODE> [stage <name>] <mes
 | `CARD_COLUMN_MISSING` | 1 | map | No column was recognized as the loyalty card number | Header has no card column, even after mapping |
 | `FIELD_MAPPED_TWICE` | 1 | map | Columns \<a> and \<b> both map to \<field>; choose one | Two columns claim one field |
 | `MAPPING_PENDING` | 3 | map | Mapping proposal written to \<path>; approve it and run again with --approve | A new or renamed column has a proposal; waits for the analyst |
-| `MEMORY_LIMIT` | 4 | any | Memory use passed \<n>% of total memory; run stopped | `--memory-stop` threshold reached |
+| `MEMORY_LIMIT` | 4 | any | Memory use passed \<n>% of total memory; run stopped (or: Memory ran out in stage \<name>; run stopped) | `--memory-stop` threshold reached, or the system refused memory before a check could stop the run |
 | `VERIFY_FAILED` | 5 | verify | Verification failed: \<detail>; nothing was published | Totals do not reconcile, or a written file does not match |
 | `INTERNAL_ERROR` | 5 | any | Unexpected error in stage \<name>; see the log | Any other failure; no traceback is printed |
 
@@ -526,6 +526,10 @@ Each stage (read, clean, write, verify) and the whole run are timed with a monot
 4. A peak above `--memory-warn` (default 50%) gives `MEMORY_WARNING`, once. A peak above `--memory-stop` (default 80%) stops the run with `MEMORY_LIMIT` and exit code 4; nothing is published.
 5. If the total cannot be read, the run gets `MEMORY_TOTAL_UNKNOWN`, the thresholds are skipped and `total_memory_mb` is `null`.
 6. The Windows reading is verified on a Windows machine before delivery.
+
+Before the input is read, the peak is estimated as 40 MB of memory per MB of input file; the measured ratio was 39 on the 100,000-record run and 29 on the 1,000,000-record run, rounded up to stay safe. If the estimate is above `--memory-stop` of total memory, the run stops at once with `MEMORY_LIMIT` and exit code 4, without reading the file and without publishing anything. When the total cannot be read, the estimate is skipped. Without this estimate a file too large to load ends the process before the first check at record 10,000, so the stop above could not happen.
+
+If the system refuses memory during a run before a check could stop it (Python raises `MemoryError`), the run stops with `MEMORY_LIMIT` and exit code 4, with the message `Memory ran out in stage <name>; run stopped`; nothing is published. On some systems the process is ended by the operating system before this can be reported, so the estimate above remains the main protection.
 
 ## 11. Acceptance cases
 
@@ -627,6 +631,7 @@ Each case becomes an automated test with a fixed expected result, and the work i
 | AC-65 | Memory above 50% and then above 80% of total, and an unknown total | `MEMORY_WARNING`, then `MEMORY_LIMIT` with exit 4 and nothing published; an unknown total gives `MEMORY_TOTAL_UNKNOWN` and skips the check |
 | AC-66 | Run files on a system with POSIX permissions, and on one without | Folder and files readable only by the owner; otherwise `PERMISSIONS_SKIPPED` in the log |
 | AC-67 | The log of a run with rejected rows | No card, name, email or phone value appears in the log |
+| AC-69 | The system refuses memory during a stage | `MEMORY_LIMIT` naming the stage, exit 4, no traceback, nothing published |
 
 ### 11.7 Volume
 

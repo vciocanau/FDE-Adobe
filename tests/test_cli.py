@@ -98,6 +98,15 @@ class CliTests(TempDirTestCase):
         self.assertNotIn("Traceback", err)
         self.assertEqual(self.run_folders(), [])
 
+    def test_memory_running_out_is_memory_limit(self):
+        """AC-69: memory refused during a stage gives MEMORY_LIMIT naming the stage, exit 4, no traceback, nothing published."""
+        with mock.patch("ingest.rows.process", side_effect=MemoryError):
+            code, _, err = self.cli(self.small_args())
+        self.assertEqual(code, 4)
+        self.assertIn("ERROR MEMORY_LIMIT [stage clean] Memory ran out in stage clean; run stopped", err)
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(self.run_folders(), [])
+
     def test_failure_after_some_files_written(self):
         """AC-63: a failure after some files were written publishes nothing and leaves no temporary folder."""
         with mock.patch("ingest.writer.write_duplicates", side_effect=OSError("disk full")):
@@ -140,6 +149,23 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 4)
         self.assertIn("ERROR MEMORY_LIMIT", err)
         self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
+
+    def test_preflight_stops_before_reading(self):
+        """Change add-preflight-memory-check: a file too large for memory stops with exit 4 before it is read."""
+        with mock.patch("ingest.cli.total_memory_mb", return_value=0.001), \
+                mock.patch("ingest.reader.read_file") as read:
+            code, _, err = self.cli(self.small_args())
+        self.assertEqual(code, 4)
+        self.assertIn("ERROR MEMORY_LIMIT [stage read]", err)
+        read.assert_not_called()
+        self.assertEqual((self.run_folders(), self.temp_folders()), ([], []))
+
+    def test_ratio_logged(self):
+        """Change add-preflight-memory-check: the estimate and the measured ratio are logged."""
+        self.cli(self.small_args())
+        log = next((self.out / "logs").glob("run_*.log")).read_text()
+        self.assertIn("estimated peak", log)
+        self.assertIn("MB per MB of input", log)
 
     def test_threshold_warning_in_outputs(self):
         """AC-52: a rejection rate above the threshold is a run warning in warnings.csv and a summary flag."""

@@ -29,6 +29,7 @@ Record of the points where the AI proposed something and the owner rejected or c
 | 23 | Control characters in other fields | Left the older rule in place for phone, email, card, consent, subscription and app installed (empty or reject the field), after name had changed to removal | One rule for every field: remove the control character, keep the rest, follow the field's own rule, warn with one code `CONTROL_CHARACTER_REMOVED` | The owner noticed the inconsistency; same principle as names: nothing is guessed, only the stray character is removed | Spec sections 6.1 to 6.5, 9; D29 |
 | 24 | Last purchase amount rules | Negative amount invalid (as in D10); open questions about zero and thousands separators | Zero invalid, negative amount invalid (the owner first considered a negative amount as a possible return, then decided not to accept it), thousands separators not accepted, currency not read and to be confirmed with the analyst because customers may not all be in Romania | Keeps the rule simple and avoids guessing ambiguous values | Spec section 6.10; D10 |
 | 25 | 10x and 100x volume | Extrapolate 10x and 100x from the 100,000-record test (D13) | Measure a real 1,000,000-record run and write the figures in the README; attempt a 10,000,000-record run and document whether it completes or stops on the memory limit | Real figures are stronger than an estimate, and a clean memory stop proves D15 | Spec section 11.7; D13 |
+| 26 | Time-zone database on Windows | Keep zero dependencies (D18); the ambiguous-hour check is skipped on Windows and the test skips with it | `tzdata` accepted as an optional dependency on Windows, tested and documented; the run still works without it | The check works on Windows with no code change once the package is present; the owner preferred a documented option to a silent gap | D18; spec 6.6 |
 
 ## Corrections found during implementation
 
@@ -48,6 +49,12 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 10 | A traceback when the log folder could not be created; column names (possibly personal data) in the log | Independent review | One operator line with `OUTPUT_NOT_WRITABLE`; the log names column positions; regression tests |
 | 11 | Several acceptance cases proven only in part | Independent review | Tests extended for AC-11, AC-25, AC-37, AC-38, AC-42, AC-51, AC-63, AC-66 |
 
+| 12 | A memory-per-input ratio of 35, computed with the file size in decimal MB | Re-measurement asked by the owner, with sizes in MiB: 39 at 1x, 29 at 10x | Ratio set to 40; runs recorded in `docs/performance-log.md` |
+
 ## Memory guard at 100x
 
-The decision on the 100x memory finding (a pre-flight check from the file size, or documentation only) is pending with the owner.
+The AI offered two options: a memory estimate before reading, or documentation only. The owner chose the estimate and asked for the 1x, 10x and 100x runs to be repeated and logged to validate it. It was added as the OpenSpec change `add-preflight-memory-check`. The 100x run now stops cleanly with `MEMORY_LIMIT` before reading.
+
+## Desktop runs on Windows
+
+The owner asked for the 100x run on a 16 GB Windows desktop with the memory stop removed, to see whether it fails there too and how long it lasts. The AI ran it with the estimate and the stop disabled in a local script, outside the repository. The run failed after 176 s with `MemoryError`, reported as `INTERNAL_ERROR`. The owner approved reporting it as `MEMORY_LIMIT` instead (OpenSpec change `report-memory-error-as-limit`). The same runs showed `peak memory None MB` on every stage: the Windows peak reading had never worked, so the memory thresholds did not apply on Windows; it is fixed in the same change.

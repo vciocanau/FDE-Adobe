@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ingest.fields import (clean_amount, clean_app, clean_card, clean_consent, clean_email, clean_name,
                            clean_phone, clean_subscription, parse_timestamp, timestamp_sort_key)
@@ -110,7 +110,10 @@ class DateTests(unittest.TestCase):
 
     def test_repeated_and_skipped_hour(self):
         """AC-36: a timestamp without a zone in the repeated or skipped local hour is kept with TIMESTAMP_AMBIGUOUS_HOUR."""
-        tz = ZoneInfo("Europe/Bucharest")
+        try:
+            tz = ZoneInfo("Europe/Bucharest")
+        except ZoneInfoNotFoundError:  # Windows without the tzdata package: the check is skipped (README, known limitations)
+            self.skipTest("no time-zone database on this system")
         run = datetime(2026, 11, 5, tzinfo=tz)
         r = parse_timestamp("2026-10-25 03:30", run, tz)
         self.assertEqual((r.value, r.codes), ("2026-10-25T03:30:00", ["TIMESTAMP_AMBIGUOUS_HOUR"]))

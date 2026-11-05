@@ -9,7 +9,7 @@ from ingest import mapping, publish, reader, rows, writer
 from ingest.agent import SimulatedAgent
 from ingest.errors import RunError
 from ingest.models import Warning
-from ingest.ops import MemoryGuard, StageTimer, setup_log, total_memory_mb
+from ingest.ops import MemoryGuard, StageTimer, estimate_peak_mb, setup_log, total_memory_mb
 
 STRONG_ROW_WARNINGS = {"NO_CONTACT_CHANNEL", "DUPLICATE_CONFLICT"}
 
@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         return _run(args, now_utc, run_id, temp, log, state)
     except RunError as err:
         return _fail(err, log, temp, args, run_id)
+    except MemoryError as exc:  # memory refused before a check could stop the run (spec 10.3)
+        err = RunError("MEMORY_LIMIT", f"Memory ran out in stage {state['stage']}; run stopped", state["stage"])
+        return _fail(err, log, temp, args, run_id, exc)
     except OSError as exc:
         if state["stage"] == "write":
             err = RunError("OUTPUT_NOT_WRITABLE", f"Output cannot be written in {args.output} ({exc})", "write")
@@ -123,8 +126,15 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
             log.warning(code.replace("_", " ").lower(), extra={"stage": state["stage"], "code": code})
     log.info(f"Run {run_id} started", extra={"stage": "start", "code": "-"})
 
+    input_mb = args.input.stat().st_size / (1024 * 1024) if args.input.is_file() else 0.0
     with timer.stage("read"):
         state["stage"] = "read"
+        for code in guard.preflight(input_mb):
+            memory_warnings.append(Warning(None, None, code))
+            log.warning(code.replace("_", " ").lower(), extra={"stage": "read", "code": code})
+        if total_mb is not None:
+            log.info(f"Input {input_mb:.1f} MB, estimated peak {estimate_peak_mb(input_mb):.0f} MB "
+                     f"of {total_mb:.0f} MB total", extra={"stage": "read", "code": "-"})
         read = reader.read_file(args.input, check)
         state["stage"] = "map"
         try:
@@ -189,6 +199,10 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
     log.info(f"Published {run_folder.name}: received {read.rows_received}, canonical {dest['canonical']}, "
              f"rejected {dest['rejected']}, duplicate losing {dest['duplicate_losing']}",
              extra={"stage": "verify", "code": "-"})
+    peak = max((r["peak_memory_mb"] or 0) for r in timer.results().values())
+    if input_mb:
+        log.info(f"Measured peak {peak:.0f} MB for {input_mb:.1f} MB of input: {peak / input_mb:.1f} MB per MB of input",
+                 extra={"stage": "verify", "code": "-"})
     print(f"Run published: {run_folder}")
     return 0
 
