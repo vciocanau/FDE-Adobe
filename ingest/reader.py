@@ -72,15 +72,21 @@ MAX_RECORD_LINES = 5
 
 def _read_records(text: str, delimiter: str, check=None) -> ReadResult:
     csv.field_size_limit(2**31 - 1)
-    lines = _NEWLINE.split(text)
-    reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter, strict=True)
+    kept = re.findall(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+\Z", text)
+    lines = [line.rstrip("\r\n") for line in kept]
+
+    def open_reader(first_line: int):
+        return csv.reader(io.StringIO("".join(kept[first_line:]), newline=""), delimiter=delimiter, strict=True)
+
+    reader = open_reader(0)
+    offset = 0
     header, warnings = _clean_header(next(reader))
     width = len(header)
     records: list[RawRecord] = []
     rejected: list[Rejected] = []
     number = 0
     while True:
-        start = reader.line_num + 1
+        start = offset + reader.line_num + 1
         try:
             cells = next(reader)
         except StopIteration:
@@ -88,10 +94,15 @@ def _read_records(text: str, delimiter: str, check=None) -> ReadResult:
         except csv.Error as exc:
             if "unexpected end of data" in str(exc):
                 raise _unclosed(start) from None
+            # The csv module drops the rest of the line after this error, including a quote that may open a
+            # field running onto the next lines. The record therefore ends where its quotes balance again.
+            last = _balanced_end(lines, start)
             number += 1
-            rejected.append(Rejected(number, ["BAD_QUOTING"], _original(lines, start, reader.line_num)))
+            rejected.append(Rejected(number, ["BAD_QUOTING"], _original(lines, start, last)))
+            offset, reader = last, open_reader(last)
             continue
-        span = reader.line_num - start + 1
+        last = offset + reader.line_num
+        span = last - start + 1
         if not cells:
             continue
         if span > MAX_RECORD_LINES:
@@ -99,7 +110,7 @@ def _read_records(text: str, delimiter: str, check=None) -> ReadResult:
         number += 1
         if check and number % 10_000 == 0:
             check()
-        original = _original(lines, start, reader.line_num)
+        original = _original(lines, start, last)
         if span > 1:
             warnings.append(Warning(number, None, "MULTILINE_RECORD"))
         if len(cells) > width:
@@ -115,6 +126,16 @@ def _read_records(text: str, delimiter: str, check=None) -> ReadResult:
     if number == 0:
         raise RunError("NO_DATA_ROWS", "Input has a header but no data rows", STAGE)
     return ReadResult(header, delimiter, records, rejected, warnings, number)
+
+
+def _balanced_end(lines: list[str], start: int) -> int:
+    """Last line of a badly quoted record: the first line from start at which the quotes balance."""
+    quotes = 0
+    for index in range(start - 1, min(len(lines), start - 1 + MAX_RECORD_LINES)):
+        quotes += lines[index].count('"')
+        if quotes % 2 == 0:
+            return index + 1
+    raise _unclosed(start)
 
 
 def _unclosed(line: int) -> RunError:

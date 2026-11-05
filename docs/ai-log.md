@@ -40,3 +40,14 @@ Errors in AI-produced work that the tests or the measurements caught, and how ea
 | 2 | A test card written as 5-9-2 digit groups that was not the same card | The duplicate test failed on correct code | Test data corrected; code unchanged |
 | 3 | Control-character removal character by character: 7 s of cleaning for 100,000 records | Profiling the volume test | Regular expression over U+0000–001F and U+007F–009F, checked equal to Unicode category Cc; cleaning time down to about 4 s |
 | 4 | A memory guard that the specification says stops a run cleanly at 80% | The 10,000,000-record run was killed by the operating system before the first check | Reported to the owner as a limitation; decision recorded below |
+| 5 | An input column named like an output column (`eligible_for_campaign`) overwrote the computed eligibility, so a customer without consent could be published as eligible | Independent review of the finished branch | Pass-through columns get unique names that never collide with output columns; regression test |
+| 6 | Suffixes for repeated unknown column names could collide and lose a value | Independent review | Suffixes skip every name already used; regression test |
+| 7 | After text following a closing quote, the standard reader dropped the rest of the line, so a quoted field opened there became fake customer rows | Independent review | The rejected record ends where its quotes balance again; reading resumes after it; regression test |
+| 8 | A malformed time-zone offset (`+24:00`) stopped the whole run | Independent review | Offsets limited to 00:00–23:59; the field is emptied with `TIMESTAMP_UNREADABLE`; regression test |
+| 9 | An approved mapping was saved in the dictionary before the conflict check | Independent review | Approved mappings are saved only after the whole header maps without a conflict; regression test |
+| 10 | A traceback when the log folder could not be created; column names (possibly personal data) in the log | Independent review | One operator line with `OUTPUT_NOT_WRITABLE`; the log names column positions; regression tests |
+| 11 | Several acceptance cases proven only in part | Independent review | Tests extended for AC-11, AC-25, AC-37, AC-38, AC-42, AC-51, AC-63, AC-66 |
+
+## Memory guard at 100x
+
+The decision on the 100x memory finding (a pre-flight check from the file size, or documentation only) is pending with the owner.

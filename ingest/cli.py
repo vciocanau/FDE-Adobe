@@ -71,7 +71,13 @@ def main(argv: list[str] | None = None) -> int:
         return err.exit_code
     now_utc = datetime.now(timezone.utc)
     run_id = now_utc.strftime("run_%Y-%m-%d_%H%M%SZ")
-    log = setup_log(args.output / "logs" / f"{run_id}.log")
+    try:
+        log = setup_log(args.output / "logs" / f"{run_id}.log")
+    except OSError as exc:
+        err = RunError("OUTPUT_NOT_WRITABLE", f"Log cannot be written in {args.output / 'logs'} ({exc.strerror or exc})",
+                       "write")
+        print(err, file=sys.stderr)
+        return err.exit_code
     for handler in log.handlers:
         if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
             handler.addFilter(_NoErrors())
@@ -167,10 +173,18 @@ def _run(args, now_utc: datetime, run_id: str, temp: Path, log, state: dict) -> 
         log.warning("file permissions cannot be restricted on this system", extra={"stage": "write", "code": w.code})
     run_folder = args.output / run_id
     publish.publish(temp, run_folder)
+    positions = {name: index for index, name in enumerate(read.header, start=1)}
+    positions.update({m.column: index for index, m in enumerate(maps, start=1)})
     for w in outcome.warnings:
         if w.record is None or w.code in STRONG_ROW_WARNINGS:
-            where = f"record {w.record}" if w.record is not None else (w.field or "run")
-            log.warning(f"{where}", extra={"stage": "clean", "code": w.code})
+            # Column names can hold personal data (a data row read as a header), so the log names positions.
+            if w.record is not None:
+                where = f"record {w.record}"
+            elif w.field:
+                where = f"column {positions.get(w.field, '?')}"
+            else:
+                where = "run"
+            log.warning(where, extra={"stage": "clean", "code": w.code})
     dest = summary["destinations"]
     log.info(f"Published {run_folder.name}: received {read.rows_received}, canonical {dest['canonical']}, "
              f"rejected {dest['rejected']}, duplicate losing {dest['duplicate_losing']}",

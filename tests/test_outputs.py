@@ -160,7 +160,7 @@ class OutputTests(TempDirTestCase):
     def test_permissions_skipped_elsewhere(self):
         """AC-66: without POSIX permissions the check is skipped with PERMISSIONS_SKIPPED."""
         self.write_outputs_only(self.clean_outcome())
-        with unittest.mock.patch("ingest.publish.os.name", "nt"):
+        with unittest.mock.patch("ingest.publish._posix", return_value=False):
             self.assertEqual([w.code for w in restrict_permissions(self.temp)], ["PERMISSIONS_SKIPPED"])
 
     def test_debug_keeps_failed_folder(self):

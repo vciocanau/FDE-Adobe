@@ -69,12 +69,19 @@ def _check_twice(maps: list[ColumnMap]) -> None:
 
 
 def _suffix_unknown(maps: list[ColumnMap]) -> list[ColumnMap]:
-    counts: dict[str, int] = {}
+    """Give pass-through columns unique names that never collide with output columns or with each other."""
+    from ingest.rows import OUTPUT_COLUMNS
+    originals = {m.column for m in maps if m.field is None}
+    used = set(OUTPUT_COLUMNS)
     for m in maps:
-        if m.field is None:
-            counts[m.column] = counts.get(m.column, 0) + 1
-            if counts[m.column] > 1:
-                m.column = f"{m.column}_{counts[m.column]}"
+        if m.field is not None:
+            continue
+        name, k = m.column, 2
+        while name in used or (name != m.column and name in originals):
+            name = f"{m.column}_{k}"
+            k += 1
+        m.column = name
+        used.add(name)
     return maps
 
 
@@ -115,6 +122,8 @@ def resolve_mapping(header: list[str], rows: list[list[str]], dictionary_path: P
     approved = apply_approval(approve, header, dictionary_path) if approve else {}
     dictionary = load_dictionary(dictionary_path)
     maps, proposals, warnings = map_header_with_samples(header, rows, dictionary, agent, approved)
+    if approved:
+        _save_approved(dictionary_path, dictionary, approved)
     if any(p["score"] >= 60 for p in proposals):
         path = write_proposal(output, input_name, proposals, now_utc)
         raise RunError("MAPPING_PENDING",
@@ -138,7 +147,6 @@ def apply_approval(path: Path, header: list[str], dictionary_path: Path) -> dict
         proposals = json.loads(Path(path).read_text(encoding="utf-8"))["proposals"]
     except (OSError, ValueError, KeyError, TypeError):
         raise RunError("USAGE", f"Wrong arguments: --approve file cannot be read: {path}", "start") from None
-    dictionary = load_dictionary(dictionary_path)
     approved: dict[str, ColumnMap] = {}
     for p in proposals:
         column, decision = p.get("column"), (p.get("decision") or "").strip().lower()
@@ -152,12 +160,17 @@ def apply_approval(path: Path, header: list[str], dictionary_path: Path) -> dict
             if field not in FIELDS:
                 raise RunError("USAGE", f"Wrong arguments: unknown field '{field}' for column {column}", "start")
             approved[column] = ColumnMap(column, field, "approved")
-            if match_key(column) not in {match_key(n) for n in dictionary[field]}:
-                dictionary[field].append(column)
             continue
         if (p.get("score") or 0) >= 60:
             raise RunError("MAPPING_PENDING",
                            f"Mapping proposal {path} has no decision for column {column}; approve it and run again",
                            STAGE)
-    Path(dictionary_path).write_text(json.dumps(dictionary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return approved
+
+
+def _save_approved(dictionary_path: Path, dictionary: dict[str, list[str]], approved: dict[str, ColumnMap]) -> None:
+    """Called only after the whole header mapped without a conflict (spec 5: never saved on a failed mapping)."""
+    for column, m in approved.items():
+        if m.field and match_key(column) not in {match_key(n) for n in dictionary[m.field]}:
+            dictionary[m.field].append(column)
+    Path(dictionary_path).write_text(json.dumps(dictionary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

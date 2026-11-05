@@ -109,7 +109,7 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 121 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 143 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 

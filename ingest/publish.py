@@ -58,9 +58,13 @@ def discard(temp: Path, debug: bool, failed_name: str) -> None:
         shutil.rmtree(temp, ignore_errors=True)
 
 
+def _posix() -> bool:
+    return os.name == "posix"
+
+
 def restrict_permissions(folder: Path) -> list[Warning]:
     """Spec 8 (D26): run folder and files readable only by their owner where the system supports it."""
-    if os.name != "posix":
+    if not _posix():
         return [Warning(None, None, "PERMISSIONS_SKIPPED")]
     for path in folder.iterdir():
         path.chmod(0o600)
