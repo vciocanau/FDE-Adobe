@@ -1,6 +1,7 @@
 """Field rules (spec section 6). Every function takes the raw cell and returns a FieldResult."""
 import re
 import unicodedata
+from datetime import datetime, timedelta, timezone, tzinfo
 
 from ingest.models import FieldResult
 from ingest.text import remove_control
@@ -67,3 +68,58 @@ def clean_email(raw: str) -> FieldResult:
     if any(ch.isspace() for ch in value) or value.count("@") != 1 or not local or "." not in domain:
         return FieldResult("", codes + ["EMAIL_INVALID"])
     return FieldResult(value, codes)
+
+
+_DATE_TIME = re.compile(
+    r"(?:(?P<iy>\d{4})-(?P<im>\d{2})-(?P<id>\d{2})"
+    r"|(?P<dd>\d{2})\.(?P<dm>\d{2})\.(?P<dy>\d{4})"
+    r"|(?P<sd>\d{2})/(?P<sm>\d{2})/(?P<sy>\d{4}))"
+    r"(?:[ T](?P<h>\d{2}):(?P<mi>\d{2})(?::(?P<s>\d{2}))?(?P<z>Z|[+-]\d{2}:\d{2})?)?",
+    re.ASCII,
+)
+
+
+def local_zone() -> tzinfo:
+    """The local time zone of the machine, as a fixed offset."""
+    return datetime.now().astimezone().tzinfo
+
+
+def parse_timestamp(raw: str, run_time: datetime, tz: tzinfo | None = None) -> FieldResult:
+    """Spec 6.6: day-first dates with an optional time; stored in ISO 8601."""
+    value, codes = _strip_control(raw)
+    value = value.strip()
+    if not value:
+        return FieldResult("", codes)
+    m = _DATE_TIME.fullmatch(value)
+    if not m or (m["z"] and not m["iy"]):
+        return FieldResult("", codes + ["TIMESTAMP_UNREADABLE"])
+    year, month, day = next((m[a], m[b], m[c]) for a, b, c in
+                            (("iy", "im", "id"), ("dy", "dm", "dd"), ("sy", "sm", "sd")) if m[a])
+    try:
+        if m["h"] is None:
+            moment = datetime(int(year), int(month), int(day))
+        else:
+            moment = datetime(int(year), int(month), int(day), int(m["h"]), int(m["mi"]), int(m["s"] or 0))
+    except ValueError:
+        return FieldResult("", codes + ["TIMESTAMP_UNREADABLE"])
+    if m["z"]:
+        offset = timezone.utc if m["z"] == "Z" else timezone(
+            (1 if m["z"][0] == "+" else -1) * timedelta(hours=int(m["z"][1:3]), minutes=int(m["z"][4:6])))
+        moment = moment.replace(tzinfo=offset)
+    stored = moment.date().isoformat() if m["h"] is None else moment.isoformat()
+    try:
+        compared = _aware(moment, tz).astimezone(timezone.utc)
+    except (OverflowError, ValueError):
+        return FieldResult("", codes + ["TIMESTAMP_OUT_OF_RANGE"])
+    if compared > run_time:
+        return FieldResult("", codes + ["TIMESTAMP_IN_FUTURE"])
+    return FieldResult(stored, codes)
+
+
+def _aware(moment: datetime, tz: tzinfo | None) -> datetime:
+    return moment if moment.tzinfo else moment.replace(tzinfo=tz or local_zone())
+
+
+def timestamp_sort_key(value: str, tz: tzinfo | None = None) -> datetime:
+    """Aware datetime for comparing stored values; a date alone is 00:00:00 local time."""
+    return _aware(datetime.fromisoformat(value), tz).astimezone(timezone.utc)

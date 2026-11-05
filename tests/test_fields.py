@@ -1,6 +1,7 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
-from ingest.fields import clean_card, clean_email, clean_name, clean_phone
+from ingest.fields import clean_card, clean_email, clean_name, clean_phone, parse_timestamp, timestamp_sort_key
 
 
 class CardTests(unittest.TestCase):
@@ -75,6 +76,39 @@ class EmailTests(unittest.TestCase):
             r = clean_email(raw)
             self.assertEqual((r.value, r.codes), ("", ["EMAIL_INVALID"]), raw)
         self.assertEqual(clean_email("").codes, [])
+
+
+RUN = datetime(2026, 11, 5, 12, 0, tzinfo=timezone(timedelta(hours=2)))
+
+
+class DateTests(unittest.TestCase):
+    def test_three_formats_day_first(self):
+        """AC-34: 2026-11-04, 04.11.2026 and 04/11/2026 give the same stored value."""
+        for raw in ["2026-11-04", "04.11.2026", "04/11/2026"]:
+            self.assertEqual(parse_timestamp(raw, RUN).value, "2026-11-04", raw)
+
+    def test_date_with_time_and_zone(self):
+        """AC-34 and spec 6.6: a time after a space or T; an ISO value may carry Z or an offset."""
+        self.assertEqual(parse_timestamp("2026-11-04 14:30", RUN).value, "2026-11-04T14:30:00")
+        self.assertEqual(parse_timestamp("04.11.2026T14:30:15", RUN).value, "2026-11-04T14:30:15")
+        self.assertEqual(parse_timestamp("2026-11-04T14:30:00+02:00", RUN).value, "2026-11-04T14:30:00+02:00")
+        self.assertEqual(parse_timestamp("2026-11-04T12:30:00Z", RUN).value, "2026-11-04T12:30:00+00:00")
+
+    def test_unreadable(self):
+        """AC-34: month-first, impossible dates and text are emptied with TIMESTAMP_UNREADABLE."""
+        for raw in ["11/13/2026", "13.13.2026", "31.02.2026", "abc"]:
+            r = parse_timestamp(raw, RUN)
+            self.assertEqual((r.value, r.codes), ("", ["TIMESTAMP_UNREADABLE"]), raw)
+
+    def test_out_of_range_and_future(self):
+        """AC-35: year 0001 with an offset and a value after the run time are emptied with their warnings."""
+        self.assertEqual(parse_timestamp("0001-01-01T00:00:00+01:00", RUN).codes, ["TIMESTAMP_OUT_OF_RANGE"])
+        self.assertEqual(parse_timestamp("2026-11-06", RUN).codes, ["TIMESTAMP_IN_FUTURE"])
+        self.assertEqual(parse_timestamp("", RUN).codes, [])
+
+    def test_sort_key(self):
+        """Spec 6.6 step 8: a date alone counts as 00:00:00 local time when compared."""
+        self.assertLess(timestamp_sort_key("2026-11-04"), timestamp_sort_key("2026-11-04T00:00:01"))
 
 
 if __name__ == "__main__":
