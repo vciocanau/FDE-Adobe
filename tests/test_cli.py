@@ -98,6 +98,15 @@ class CliTests(TempDirTestCase):
         self.assertNotIn("Traceback", err)
         self.assertEqual(self.run_folders(), [])
 
+    def test_memory_running_out_is_memory_limit(self):
+        """AC-69: memory refused during a stage gives MEMORY_LIMIT naming the stage, exit 4, no traceback, nothing published."""
+        with mock.patch("ingest.rows.process", side_effect=MemoryError):
+            code, _, err = self.cli(self.small_args())
+        self.assertEqual(code, 4)
+        self.assertIn("ERROR MEMORY_LIMIT [stage clean] Memory ran out in stage clean; run stopped", err)
+        self.assertNotIn("Traceback", err)
+        self.assertEqual(self.run_folders(), [])
+
     def test_failure_after_some_files_written(self):
         """AC-63: a failure after some files were written publishes nothing and leaves no temporary folder."""
         with mock.patch("ingest.writer.write_duplicates", side_effect=OSError("disk full")):

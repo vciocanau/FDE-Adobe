@@ -87,6 +87,9 @@ def main(argv: list[str] | None = None) -> int:
         return _run(args, now_utc, run_id, temp, log, state)
     except RunError as err:
         return _fail(err, log, temp, args, run_id)
+    except MemoryError as exc:  # memory refused before a check could stop the run (spec 10.3)
+        err = RunError("MEMORY_LIMIT", f"Memory ran out in stage {state['stage']}; run stopped", state["stage"])
+        return _fail(err, log, temp, args, run_id, exc)
     except OSError as exc:
         if state["stage"] == "write":
             err = RunError("OUTPUT_NOT_WRITABLE", f"Output cannot be written in {args.output} ({exc})", "write")

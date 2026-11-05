@@ -340,6 +340,13 @@ Before reading the input, the system SHALL estimate the run's peak memory as 40 
 - **WHEN** total memory cannot be read
 - **THEN** no estimate is made, MEMORY_TOTAL_UNKNOWN is recorded once, and the run proceeds
 
+### Requirement: Memory that runs out during a run
+When the system refuses memory during a run before a memory check could stop it, the system SHALL stop with MEMORY_LIMIT and exit code 4, with the message "Memory ran out in stage <name>; run stopped", SHALL print no traceback, and SHALL publish nothing.
+
+#### Scenario: AC-69
+- **WHEN** the system refuses memory during the clean stage
+- **THEN** `MEMORY_LIMIT` naming the stage, exit 4, no traceback, nothing published
+
 ### Requirement: Volume
 A synthetic file of 100,000 records SHALL run to completion with the duration and peak memory of each stage in the run summary.
 
