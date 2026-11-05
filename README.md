@@ -9,7 +9,7 @@ A command-line program that reads one customer-profile CSV export from a superma
 | Document | What it holds |
 | --- | --- |
 | [`docs/brainstorming/brainstorming.md`](docs/brainstorming/brainstorming.md) | Map of the problem, assumptions A1–A10, decisions D1–D30 with reasons, what was left out and why |
-| [`docs/specification/specification.md`](docs/specification/specification.md) | The contract: input, mapping, field rules, row processing, outputs, codes, operations, 68 acceptance cases (AC-01…AC-68) |
+| [`docs/specification/specification.md`](docs/specification/specification.md) | The contract: input, mapping, field rules, row processing, outputs, codes, operations, 69 acceptance cases (AC-01…AC-69) |
 | [`openspec/specs/ingestion/spec.md`](openspec/specs/ingestion/spec.md) | The same specification in OpenSpec form (requirements and WHEN/THEN scenarios) |
 | [`docs/plan/2026-11-05-ingest-plan.md`](docs/plan/2026-11-05-ingest-plan.md) | Implementation plan: 19 tasks, each with files, interfaces and the tests written before the code |
 | [`docs/ai-log.md`](docs/ai-log.md) | What the AI proposed and what was rejected or changed |
@@ -118,7 +118,7 @@ CRM CSV ──► read ──────────► clean ─────�
 python -m unittest -v
 ```
 
-The suite has 158 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-68) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
+The suite has 158 tests. Each test's docstring names the acceptance case it proves (AC-01…AC-69) or the spec section. The 100,000-record volume test runs with `INGEST_VOLUME=1`. Synthetic data comes from `python tools/generate_synthetic.py --rows N --out file.csv --seed 42`; it contains invented names only.
 
 ## Performance
 
