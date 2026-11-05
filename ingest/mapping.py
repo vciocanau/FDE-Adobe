@@ -28,7 +28,7 @@ def band(score: int) -> str:
 def map_header(header: list[str], dictionary: dict[str, list[str]], proposer: Proposer | None = None,
                approved: dict[str, ColumnMap] | None = None) -> tuple[list[ColumnMap], list[dict]]:
     """Map every header cell; returns the maps and the proposals for columns the dictionary does not know."""
-    lookup = {match_key(name): f for f, names in dictionary.items() for name in names}
+    lookup = {match_key(name): f for f, names in dictionary.items() for name in [f, *names]}
     approved = approved or {}
     maps: list[ColumnMap] = []
     unresolved: list[int] = []

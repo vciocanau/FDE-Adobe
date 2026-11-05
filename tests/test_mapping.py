@@ -20,6 +20,11 @@ class DictionaryMappingTests(unittest.TestCase):
         self.assertEqual(proposals, [])
         self.assertEqual([(w.field, w.code) for w in mapping_warnings(maps)], [("Religie", "UNKNOWN_COLUMN")])
 
+    def test_canonical_name_maps_to_itself(self):
+        """Spec 8: a column already named like a canonical field maps to that field."""
+        maps, _ = map_header(["card_number", "last_interaction_at", "last_purchase_at"], self.dictionary)
+        self.assertEqual([m.field for m in maps], ["card_number", "last_interaction_at", "last_purchase_at"])
+
     def test_whole_name_only(self):
         """Spec 5: a part of a name never matches."""
         maps, _ = map_header(["card_number", "email_backup"], self.dictionary)

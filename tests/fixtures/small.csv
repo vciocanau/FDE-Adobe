@@ -1,0 +1,5 @@
+card_number,first_name,email,phone,consent,subscription,last_interaction_at
+1111222233334444,Gheorghe,ana@example.com,0722123456,da,activ,2026-01-01
+1111222233334444,Gheorghe,ana@example.com,0722123456,da,activ,2026-02-01
+,Ion,ion@example.com,,da,activ,2026-01-01
+1111222233335555,Maria,maria@example,0722999888,nu,activ,2026-01-01
