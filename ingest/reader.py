@@ -66,17 +66,58 @@ def _clean_header(cells: list[str]) -> tuple[list[str], list[Warning]]:
     return header, warnings
 
 
+MAX_RECORD_LINES = 5
+
+
 def _read_records(text: str, delimiter: str) -> ReadResult:
+    csv.field_size_limit(2**31 - 1)
+    lines = _NEWLINE.split(text)
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter, strict=True)
     header, warnings = _clean_header(next(reader))
+    width = len(header)
     records: list[RawRecord] = []
     rejected: list[Rejected] = []
     number = 0
-    for cells in reader:
+    while True:
+        start = reader.line_num + 1
+        try:
+            cells = next(reader)
+        except StopIteration:
+            break
+        except csv.Error as exc:
+            if "unexpected end of data" in str(exc):
+                raise _unclosed(start) from None
+            number += 1
+            rejected.append(Rejected(number, ["BAD_QUOTING"], _original(lines, start, reader.line_num)))
+            continue
+        span = reader.line_num - start + 1
         if not cells:
             continue
+        if span > MAX_RECORD_LINES:
+            raise _unclosed(start)
         number += 1
-        records.append(RawRecord(number, reader.line_num, cells, delimiter.join(cells)))
+        original = _original(lines, start, reader.line_num)
+        if span > 1:
+            warnings.append(Warning(number, None, "MULTILINE_RECORD"))
+        if len(cells) > width:
+            if any(c.strip() for c in cells[width:]):
+                rejected.append(Rejected(number, ["EXTRA_CELLS"], original))
+                continue
+            cells = cells[:width]
+            warnings.append(Warning(number, None, "TRAILING_EMPTY_CELLS"))
+        elif len(cells) < width:
+            cells = cells + [""] * (width - len(cells))
+            warnings.append(Warning(number, None, "SHORT_ROW"))
+        records.append(RawRecord(number, start, cells, original))
     if number == 0:
         raise RunError("NO_DATA_ROWS", "Input has a header but no data rows", STAGE)
     return ReadResult(header, delimiter, records, rejected, warnings, number)
+
+
+def _unclosed(line: int) -> RunError:
+    return RunError("UNCLOSED_QUOTE", f"A quoted field is never closed; the broken record starts on line {line}",
+                    STAGE)
+
+
+def _original(lines: list[str], first: int, last: int) -> str:
+    return remove_control("\n".join(lines[first - 1:last]))[0]
