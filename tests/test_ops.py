@@ -17,7 +17,9 @@ class OpsTests(TempDirTestCase):
                 pass
         self.assertEqual(list(t.results()), ["read", "clean", "write", "verify"])
         self.assertEqual(set(t.results()["read"]), {"duration_ms", "peak_memory_mb"})
-        self.assertGreaterEqual(t.total_ms(), sum(v["duration_ms"] for v in t.results().values()))
+        # Each of the five values is rounded to 0.1 ms, so the sum can exceed the total by up to 0.25 ms.
+        stage_sum = sum(v["duration_ms"] for v in t.results().values())
+        self.assertGreaterEqual(t.total_ms() + 0.3, stage_sum)
 
     def test_memory_readings(self):
         """Spec 10.3: the process peak is read; the total is read or None."""
