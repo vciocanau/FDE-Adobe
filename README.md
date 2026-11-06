@@ -2,7 +2,21 @@
 
 A command-line program that reads one customer-profile CSV export from a supermarket chain's CRM, cleans and validates it, and publishes a canonical customer table with campaign eligibility at export time. It also publishes the rejected rows, the losing duplicates, every warning and a run summary. The customer is hypothetical. Every assumption about it is labelled and listed in [`docs/brainstorming/brainstorming.md`](docs/brainstorming/brainstorming.md), with the points to confirm with a real customer in section 8.
 
-**End user:** the data analyst who prepares the marketing database. **Later consumer:** an orchestrator that sends campaigns, for which the outputs are a contract.
+**End user:** the data analyst who prepares the marketing database. **Later integration:** an orchestrator that starts the run, reads the outputs as a contract and sends campaigns.
+
+## Customer context and value
+
+**Assumed customer:** a supermarket chain with a loyalty program. A data analyst prepares the marketing database from CRM exports. The exports are noisy: column names change between exports (schema drift), values arrive in many spellings, and files edited in Excel lose details such as the leading 0 of a phone number.
+
+**Value the solution would create:**
+
+- **Campaigns reach only people who agreed.** A customer is eligible only with consent, an active subscription and a valid contact channel. Unknown never enables a campaign, which lowers the GDPR risk.
+- **Less manual cleaning.** The analyst reviews what the run reports instead of fixing the file by hand.
+- **No silent data loss.** Every record ends as a customer, a rejected row or a losing duplicate, with the reason, and the totals reconcile.
+- **Schema drift becomes a clear decision.** A new column stops the run with a mapping proposal, so the analyst approves it once and the next exports continue.
+- **A stable contract.** The campaign orchestrator reads the same versioned files, whatever the export looks like.
+
+These benefits are expected, not measured: the customer is hypothetical.
 
 ## Documents
 
@@ -138,6 +152,63 @@ CRM CSV ──► read ──────────► clean ─────�
 | `ingest/ops.py` | Stage timing, memory readings (Linux, macOS, Windows), memory guard, log |
 | `ingest/cli.py` | Arguments, run orchestration, operator messages |
 
+### Target deployment
+
+Only the Python job exists today, and an analyst starts it from the command line. The assumed deployment makes it one step in the orchestrator's flow, started from a menu or by the orchestrator's scheduler; this is to confirm with a real customer. The other boxes show that target.
+
+```mermaid
+flowchart TD
+    CRM["CRM"] -->|"exports customers"| Input["CSV input area"]
+    T["Menu or scheduler"] -->|"starts a run"| O["Campaign orchestrator"]
+    O -->|"runs the command"| J["Python job"]
+    Input -->|"CSV to process"| J
+    J -->|"verified outputs"| Output["Output area"]
+    J -->|"exit code"| O
+    Output -->|"reads the contract"| O
+    O --> Send["Campaign sending"]
+    J -.->|"status, duration, errors"| Monitor["Monitoring"]
+```
+
+### Integration options
+
+| Option | How it works | Change needed | Best when |
+| --- | --- | --- | --- |
+| **Step started by the orchestrator (assumed)** | A menu action or the orchestrator's scheduler runs the command with `--input` and `--output`, then reads the exit code and the outputs | None in the job; the orchestrator adds the call | Both share a host or a storage area |
+| Task on a workflow platform | The same command runs in a container, as one task of a workflow | Packaging | Retries, run history and schedules are needed |
+| HTTP API around the job | `POST /runs` returns a run id at once; `GET /runs/{id}` returns the status | A small service | The orchestrator runs elsewhere |
+| File-arrival event | A new export in storage raises an event that starts the run | A small trigger | No person needs to start the run |
+| Customer events | The CRM publishes each change; the same field rules run per customer | A large redesign | Consent changes must arrive within minutes |
+
+In the first option, the exit code tells the orchestrator what to do next:
+
+| Exit code | Orchestrator action |
+| --- | --- |
+| 0 | Read the run folder named on the last printed line, check the schema version, continue the flow |
+| 1 | Show the error line and ask the analyst for a corrected export |
+| 2 | Report a configuration or access problem |
+| 3 | Open an approval task from the proposal file, then repeat the run with `--approve` |
+| 4 | Stop and alert support: the export needs a larger machine or splitting |
+| 5 | Stop, alert support and use no output |
+
+This option still needs three additions: an approval screen in place of the hand-edited JSON file, a guard against starting the same export twice, and a way to send run status to monitoring.
+
+## Assumptions
+
+The brief is intentionally vague, so these are guesses to confirm with a real customer. Full wording and status: [`docs/brainstorming/brainstorming.md`](docs/brainstorming/brainstorming.md), section 3.
+
+| # | Assumption |
+| --- | --- |
+| A1 | The customer is a supermarket chain with a loyalty program, physical stores, web, app and social presence. |
+| A2 | The loyalty card is a stable key: exactly 16 digits, one card type. |
+| A3 | Each CRM row has at least one contact channel, plus subscription and consent state at export time. Last purchase columns are optional. |
+| A4 | An export holds about 100,000 records. |
+| A5 | Consent values arrive in many spellings and normalize to yes, no or unknown. |
+| A6 | Mapping scores: above 90 safe, 60 to 90 with caution, below 60 no proposal. The score never approves a mapping by itself. |
+| A7 | More than 3% of valid-card profiles without a contact channel means the source probably broke. The value is configurable. |
+| A8 | An account requires a confirmed email or phone, so a profile with no contact channel should not exist. |
+| A9 | The end user is a data analyst who prepares the marketing database. |
+| A10 | Excel can drop a phone's leading 0, so nine digits starting with 7 are a Romanian mobile number. The default prefix is +40. |
+
 ## Main decisions
 
 - **Identity key** is the 16-digit loyalty card. A row without a valid card is rejected, never guessed (D3, D23).
@@ -146,6 +217,18 @@ CRM CSV ──► read ──────────► clean ─────�
 - **Strict reading:** extra cells with values, text after a closing quote and an unclosed quote are diagnosed, never silently absorbed (D29).
 - **The mapping agent is simulated.** There is no API key. It sees only column names and masked samples, and it never approves a mapping by itself (D6, D8, D24).
 - **Zero dependencies** (D18); `tzdata` is optional on Windows.
+
+## Trade-offs
+
+| Choice | Gained | Given up | Revisit when |
+| --- | --- | --- | --- |
+| Batch CSV instead of an API or events | Simple and robust; fits the 8–10 hour budget | Data is as old as the export, so eligibility holds at export time and the orchestrator must recheck before sending | Consent changes must reach campaigns within minutes |
+| Records held in memory instead of streaming | Simple duplicate handling and reconciliation | 1,000,000 records need 3.2 GB; 10,000,000 stop with `MEMORY_LIMIT` | Exports grow far above 100,000 records |
+| Every mapping proposal stops the run | A wrong column is never applied silently | A run waits for the analyst | Real data shows which high scores are safe |
+| Simulated agent instead of a live model | No API key, repeatable runs, no data sent out | Fewer columns are recognized | An approved provider and privacy review exist |
+| Standard CSV reader instead of a custom one | Saves 1–2 hours and keeps less code | A stray quote in an unquoted field is not flagged | Such files appear in practice |
+| Card as the only identity key | No wrong matches between people | Rows without a valid card are rejected, not matched by name, phone or email | A GDPR basis for matching exists |
+| Python with the standard library only | Versatile: the same code runs on Windows, Linux and macOS, with nothing to install but Python | No encryption of output files; slower than a compiled language or a columnar data library | The customer's PII policy requires encryption, or volumes need faster processing |
 
 ## Tests
 
@@ -180,7 +263,7 @@ Each canonical, rejected and duplicate count is the same on both machines. Time 
 
 Before reading, the run estimates its peak at 40 MB of memory per MB of input. The measured ratio was 29 to 39 on both machines, so the estimate is on the safe side. If the estimate is above the stop share of total memory, the run stops at once without reading the file. Without this estimate, the 100x run had different endings on the two machines. On Linux the operating system killed it after 19 s. On Windows it filled memory and the page file for 3 minutes and then failed with `MemoryError`. The 100x file needs about 44 GB, so volumes far above 10x need the read and clean stages to stream records instead of keeping everything in memory (D16).
 
-The full test suite also passes on the Windows desktop, including the Windows memory reading.
+The full test suite also passes on the Windows desktop, including the Windows memory reading. The test suite and the sample run also pass on macOS (MacBook Pro, 8 GB RAM, Python 3.14); the output is in [`docs/macos-test-run.txt`](docs/macos-test-run.txt). No volume run was measured there.
 
 ## Known limitations
 
@@ -202,3 +285,12 @@ The full test suite also passes on the Windows desktop, including the Windows me
 ## AI use
 
 The work followed brainstorming, then specification, then plan, then test-first implementation, with an AI assistant (Claude, with the Superpowers skills). The assistant drafted documents, tests and code. Every rule was decided or approved by the owner, and the assistant's proposals that were rejected or changed are listed in [`docs/ai-log.md`](docs/ai-log.md). Test expectations come from the specification's acceptance cases and were written before the code. Each one was watched failing, then passing. The finished branch was reviewed by a separate AI reviewer that had not seen the work being produced. Its findings and the fixes are recorded in the AI log. Agent instructions are in [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md).
+
+### Where AI was deliberately not relied on
+
+- **Step-by-step approval instead of autonomous work.** Across the specification and the coding, the AI analysed and proposed, and the owner approved each step before it was applied. Early on the AI ran ahead and applied edits without approval, so the owner set the rule: analysis first, explicit consent for each change.
+- **Business rules stayed with the owner.** The AI proposed a 5% missing-contact threshold; the owner set 3%. The owner also added the case of Excel dropping a phone number's leading 0, which the AI had not considered.
+- **Simple over clever.** The AI proposed a custom CSV reader. The owner kept the standard Python reader and documented the remaining risk as a known limitation.
+- **Measurements over estimates.** The AI proposed extrapolating 10x and 100x from the 100,000-record test. The owner required real runs.
+- **No autonomous AI decision at run time.** The mapping agent only proposes. A human approves every mapping, and validation rules stay deterministic.
+- **AI output was not trusted by default.** Tests, measurements and independent reviews caught real defects, including one that could publish a customer without consent as eligible. They are listed in [`docs/ai-log.md`](docs/ai-log.md).

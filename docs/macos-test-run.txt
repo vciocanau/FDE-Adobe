@@ -1,0 +1,43 @@
+macOS test run, 2026-11-06
+Machine: MacBook Pro, 8 GB RAM. Python 3.14.10.
+Copy of the repository taken as a ZIP from GitHub. Output copied from the terminal.
+The temporary folder path was shortened to <temp>.
+
+$ python3 --version
+Python 3.14.10
+
+$ python3 -m unittest
+.................................................................s..................................................................................2026-11-06T08:21:53Z INFO start - Run run_2026-11-06_082153Z started
+2026-11-06T08:21:53Z INFO read - Input 0.2 MB, estimated peak 9 MB of 8192 MB total
+2026-11-06T08:21:53Z INFO read - Stage finished in 15.3 ms, peak memory 67.4 MB
+2026-11-06T08:21:54Z INFO clean - Stage finished in 114.6 ms, peak memory 67.4 MB
+2026-11-06T08:21:54Z INFO write - Stage finished in 12.4 ms, peak memory 67.4 MB
+2026-11-06T08:21:54Z INFO verify - Stage finished in 5.6 ms, peak memory 67.4 MB
+2026-11-06T08:21:54Z WARNING clean UNKNOWN_COLUMN column 12
+2026-11-06T08:21:54Z WARNING clean NO_CONTACT_CHANNEL record 1218
+2026-11-06T08:21:54Z WARNING clean NO_CONTACT_CHANNEL record 1452
+2026-11-06T08:21:54Z WARNING clean NO_CONTACT_CHANNEL record 1463
+2026-11-06T08:21:54Z WARNING clean NO_CONTACT_CHANNEL record 1623
+2026-11-06T08:21:54Z INFO verify - Published run_2026-11-06_082153Z: received 2000, canonical 1986, rejected 2, duplicate losing 12
+2026-11-06T08:21:54Z INFO verify - Measured peak 67 MB; input under 1 MB, no ratio
+Run published: <temp>/runs/run_2026-11-06_082153Z
+.s
+----------------------------------------------------------------------
+Ran 150 tests in 3.177s
+
+OK (skipped=2)
+
+$ python3 -m ingest run --input examples/crm_export_sample.csv
+2026-11-06T08:24:33Z INFO start - Run run_2026-11-06_082433Z started
+2026-11-06T08:24:33Z INFO read - Input 0.0 MB, estimated peak 0 MB of 8192 MB total
+2026-11-06T08:24:33Z INFO read - Stage finished in 12.7 ms, peak memory 17.8 MB
+2026-11-06T08:24:33Z INFO clean - Stage finished in 22.1 ms, peak memory 18.2 MB
+2026-11-06T08:24:33Z INFO write - Stage finished in 5.9 ms, peak memory 18.2 MB
+2026-11-06T08:24:33Z INFO verify - Stage finished in 1.5 ms, peak memory 18.2 MB
+2026-11-06T08:24:33Z WARNING clean UNKNOWN_COLUMN column 11
+2026-11-06T08:24:33Z WARNING clean NO_CONTACT_CHANNEL record 6
+2026-11-06T08:24:33Z WARNING clean MISSING_CONTACT_THRESHOLD run
+2026-11-06T08:24:33Z WARNING clean REJECTION_RATE_HIGH run
+2026-11-06T08:24:33Z INFO verify - Published run_2026-11-06_082433Z: received 8, canonical 5, rejected 2, duplicate losing 1
+2026-11-06T08:24:33Z INFO verify - Measured peak 18 MB; input under 1 MB, no ratio
+Run published: runs/run_2026-11-06_082433Z
