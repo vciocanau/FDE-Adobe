@@ -1,0 +1,9 @@
+﻿NrCl,Prenume,Nume familie,Email,Mob,Aplicatie,Acord GDPR,Newsletter,Ultima_Interactiune,Valoare Bon,Oras
+1000 2000 3000 4000,Ana,Popescu,ana.popescu@example.com,0722 123 456,da,da,activ,2026-10-01,45.50,Cluj
+1000200030004000,Ana,Popescu,ana.popescu@example.com,0722123456,da,nu,activ,2026-10-20,12.00,Cluj
+1000200030005000,Åžtefan,Ionescu,STEFAN@EXAMPLE.COM ,722987654,nu,yes,active,04.10.2026,30,Iasi
+1000200030006000,Maria,Dumitru,maria@example,0733111222,nu,da,inactiv,15/09/2026,0,Brasov
+,Ion,Stan,ion.stan@example.com,0744555666,da,da,activ,2026-09-30,20.00,Timisoara
+1000200030007000,Elena,Marin,,,nu,da,activ,2026-08-12,18.20,Cluj
+1000200030008000,Radu,Tudor,radu@example.com,0755000111,da,poate,activ,2026-07-01,9.99,Iasi,extra
+1000200030009000,Ioana,LazÄƒr,ioana@example.com,0766222333,da,da,activ,2026-10-30 14:30,52.10,Bucuresti
