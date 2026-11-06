@@ -118,6 +118,20 @@ Every stop prints one line, `ERROR <CODE> [stage <name>] <message>`. No tracebac
 
 When a column is not in the dictionary and the simulated agent proposes a field with a score of 60 or more, the run stops with exit code 3. It writes `runs/mapping_proposals/proposal_<time>Z.json`. The analyst fills in `decision` for each entry: `approve`, `reject` or `change` (with `use_field`). Then the run is repeated with `--approve <that file>`. Approved and changed mappings are added to the dictionary.
 
+**Try it:** [`test_mapare.csv`](test_mapare.csv) is a small synthetic export made for this flow. Its columns `NrCl`, `Mob` and `Oras` are not in the dictionary.
+
+```
+py -m ingest run --input test_mapare.csv
+```
+
+The run stops with exit code 3. In the proposal file, set `decision` to `approve` for `NrCl` (card number, score 94) and `Mob` (phone, score 75), and to `reject` for `Oras`, which has no proposed field. Then repeat the run:
+
+```
+py -m ingest run --input test_mapare.csv --approve runs\mapping_proposals\proposal_<time>Z.json
+```
+
+The run publishes 5 customers, 2 rejected rows and 1 duplicate. `NrCl` and `Mob` are now in `mappings/synonyms.json`, so the next export with these columns does not stop. To repeat the demo, run `git restore mappings/synonyms.json` first. On macOS and Linux, use `python3` and forward slashes.
+
 ## Outputs
 
 Each successful run writes one folder, `runs/run_YYYY-MM-DD_HHMMSSZ` (UTC). The files are written into a temporary folder, verified, and only then renamed, so a run publishes all five files or nothing. Existing run folders are never overwritten.
@@ -177,7 +191,8 @@ flowchart TD
 | Task on a workflow platform | The same command runs in a container, as one task of a workflow | Packaging | Retries, run history and schedules are needed |
 | HTTP API around the job | `POST /runs` returns a run id at once; `GET /runs/{id}` returns the status | A small service | The orchestrator runs elsewhere |
 | File-arrival event | A new export in storage raises an event that starts the run | A small trigger | No person needs to start the run |
-| Customer events | The CRM publishes each change; the same field rules run per customer | A large redesign | Consent changes must arrive within minutes |
+| Batch plus a consent stream | The export stays as it is; the CRM publishes only consent withdrawals, and the orchestrator checks an exclusion list before sending | A small consumer and the exclusion list | Only consent must be fresh; this is the first step to take |
+| Customer events | The CRM publishes each change; the same field rules run per customer | A large redesign: a service that runs all the time, a customer store, event deduplication and ordering, a dead-letter queue, a new output contract | Most customer data must arrive within minutes |
 
 In the first option, the exit code tells the orchestrator what to do next:
 
