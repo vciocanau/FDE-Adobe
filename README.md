@@ -224,6 +224,8 @@ The brief is intentionally vague, so these are guesses to confirm with a real cu
 | A9 | The end user is a data analyst who prepares the marketing database. |
 | A10 | Excel can drop a phone's leading 0, so nine digits starting with 7 are a Romanian mobile number. The default prefix is +40. |
 
+Also to confirm with the analyst (spec section 6.10): which amounts the export holds. `last_purchase_amount` is assumed to be the value of the last receipt, not the total spent over the whole relationship, and the currency is not read. The dictionary lists several possible names, including `total_spent`, because the real columns are unknown; only the confirmed names should stay.
+
 ## Main decisions
 
 - **Identity key** is the 16-digit loyalty card. A row without a valid card is rejected, never guessed (D3, D23).
