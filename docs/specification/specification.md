@@ -102,7 +102,7 @@ All results are kept in memory at once (D16).
 
 ## 5. Header mapping
 
-Each cell of the header is mapped to a canonical field once per run, before any record is read. A column is never mapped silently by a guess: it is mapped by the dictionary, or by a decision of the analyst.
+Each cell of the header is mapped to a canonical field once per run, after the file is read and before any record is cleaned. A column is never mapped silently by a guess: it is mapped by the dictionary, or by a decision of the analyst.
 
 ### Matching names
 
